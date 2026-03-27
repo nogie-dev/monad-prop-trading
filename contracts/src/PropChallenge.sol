@@ -9,6 +9,14 @@ interface IAccountFactory {
     function deployAccount(address trader) external returns (address);
 }
 
+interface ITreasury {
+    function fundAccount(address pa, uint256 amount) external;
+}
+
+interface ITradingAccount {
+    function setInitialCapital(uint256 amount) external;
+}
+
 /// @title PropChallenge
 /// @notice Manages challenge fee collection, paper trading evaluation, and pass/fail state.
 contract PropChallenge is Ownable, ReentrancyGuard {
@@ -63,6 +71,7 @@ contract PropChallenge is Ownable, ReentrancyGuard {
     uint256 public challengeFee;
     uint256 public virtualInitialBalance;
     uint256 public profitTarget; // Minimum virtualBalance to pass
+    uint256 public paFundingAmount; // Real USDC to fund PA upon pass
 
     mapping(address => ChallengeStatus) public challengeStatus;
     mapping(address => EvaluationAccount) public evalAccounts;
@@ -104,6 +113,11 @@ contract PropChallenge is Ownable, ReentrancyGuard {
         challengeFee = _fee;
         virtualInitialBalance = _initialBalance;
         profitTarget = _target;
+    }
+
+    /// @notice Set real USDC funding amount for newly deployed PAs.
+    function setPaFundingAmount(uint256 amount) external onlyOwner {
+        paFundingAmount = amount;
     }
 
     // ── Challenge Entry ─────────────────────────────────────────────────
@@ -209,6 +223,12 @@ contract PropChallenge is Ownable, ReentrancyGuard {
 
         // Deploy PA via factory
         address pa = factory.deployAccount(trader);
+
+        // Fund PA and set its initial capital if configured
+        if (paFundingAmount > 0) {
+            ITreasury(treasury).fundAccount(pa, paFundingAmount);
+            ITradingAccount(pa).setInitialCapital(paFundingAmount);
+        }
 
         emit ChallengePassed(trader, pa);
     }

@@ -113,7 +113,9 @@ contract TradingAccount is ReentrancyGuard {
 
     // ── Settlement ──────────────────────────────────────────────────────
     /// @notice Settle profits: 80% to trader, 20% to treasury.
-    function settle() external onlyOwner nonReentrant {
+    /// @dev Callable by owner or trader; withdraws profit only (initial capital stays).
+    function settle() external nonReentrant {
+        if (msg.sender != owner && msg.sender != trader) revert NotOwner();
         uint256 currentValue = getPortfolioValue();
         if (currentValue <= initialCapital) revert InsufficientProfit();
 
@@ -121,9 +123,8 @@ contract TradingAccount is ReentrancyGuard {
         uint256 traderShare = (profit * TRADER_SHARE_BPS) / BPS_DENOMINATOR;
         uint256 platformShare = profit - traderShare;
 
-        // Return initial capital + platform share to treasury
-        IERC20(usdc).transfer(treasury, initialCapital + platformShare);
-        // Send trader share
+        // Withdraw only profit: platform share to treasury, trader share to trader.
+        IERC20(usdc).transfer(treasury, platformShare);
         IERC20(usdc).transfer(trader, traderShare);
 
         emit Settled(trader, traderShare, platformShare);
