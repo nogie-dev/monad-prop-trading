@@ -25,14 +25,14 @@
 - [ ] Testnet deployment
 - [ ] Record deployed addresses in frontend/src/config/addresses.ts
 
-## Phase 2: Paper Trading Frontend [NOT STARTED]
-- [ ] React project setup (Vite + TypeScript + Tailwind)
-- [ ] Wallet connection (ethers.js v6)
-- [ ] Price feed integration (CoinGecko API or DEX oracle)
-- [ ] Challenge fee deposit UI → PropChallenge.depositFee()
-- [ ] Virtual trading UI (open/close position buttons)
-- [ ] On-chain position recording → PropChallenge.openPosition/closePosition()
-- [ ] P&L display + pass/fail evaluation status
+## Phase 2: Paper Trading Frontend [COMPLETE]
+- [x] React project setup (Vite + TypeScript + Tailwind)
+- [x] Wallet connection (ethers.js v6)
+- [x] Price feed integration (CoinGecko API)
+- [x] Challenge fee deposit UI → PropChallenge.depositFee()
+- [x] Virtual trading UI (open/close position buttons)
+- [x] On-chain position recording → PropChallenge.openPosition/closePosition()
+- [x] P&L display + pass/fail evaluation status
 - [ ] Pass trigger (team EOA calls passChallenge)
 
 ## Phase 3: PA Dashboard Frontend [NOT STARTED]
@@ -53,3 +53,4 @@
 <!-- Append a line after each session -->
 <!-- Format: YYYY-MM-DD HH:MM | What was done | What's next -->
 2026-03-26 23:00 | Phase 1 contracts complete: 4 contracts (TradingAccount, AccountFactory, PropChallenge, Treasury) + 24 tests all passing + Deploy.s.sol | Next: testnet deployment, then Phase 2 frontend
+2026-03-27 | Phase 2 frontend complete: Vite+React+Tailwind setup, wallet connection (MetaMask/Monad), CoinGecko price feed, challenge deposit UI, trading panel (open/close positions), P&L display with progress bar, contract ABIs extracted | Next: Phase 3 PA Dashboard
