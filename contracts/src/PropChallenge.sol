@@ -15,7 +15,6 @@ contract PropChallenge is Ownable, ReentrancyGuard {
     // ── Errors ──────────────────────────────────────────────────────────
     error InvalidStatus();
     error InsufficientFee();
-    error MaxPositionsReached();
     error PositionNotOpen();
     error InvalidPositionIndex();
     error InsufficientVirtualBalance();
@@ -64,8 +63,6 @@ contract PropChallenge is Ownable, ReentrancyGuard {
     uint256 public challengeFee;
     uint256 public virtualInitialBalance;
     uint256 public profitTarget; // Minimum virtualBalance to pass
-
-    uint8 public constant MAX_OPEN_POSITIONS = 5;
 
     mapping(address => ChallengeStatus) public challengeStatus;
     mapping(address => EvaluationAccount) public evalAccounts;
@@ -146,7 +143,6 @@ contract PropChallenge is Ownable, ReentrancyGuard {
         if (!allowedEvalTokens[token]) revert TokenNotAllowed();
 
         EvaluationAccount storage acc = evalAccounts[msg.sender];
-        if (acc.openPositionCount >= MAX_OPEN_POSITIONS) revert MaxPositionsReached();
         if (size > acc.virtualBalance) revert InsufficientVirtualBalance();
 
         acc.virtualBalance -= size;

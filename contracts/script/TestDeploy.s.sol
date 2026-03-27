@@ -5,64 +5,58 @@ import {Script, console} from "forge-std/Script.sol";
 import {Treasury} from "../src/Treasury.sol";
 import {AccountFactory} from "../src/AccountFactory.sol";
 import {PropChallenge} from "../src/PropChallenge.sol";
+import {TestUSDC} from "../src/TestUSDC.sol";
 
-contract DeployScript is Script {
+/// @notice Deploys full stack with freshly minted TestUSDC for local/sandbox testing.
+contract TestDeployScript is Script {
     function run() external {
-        // ── Config ──────────────────────────────────────────────────────
-        address deployer = msg.sender;
-        address usdc = vm.envAddress("USDC_ADDRESS");
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerKey);
 
-        // DEX whitelist
+        // ── Config ──────────────────────────────────────────────────────
         address dexRouter = vm.envAddress("DEX_ROUTER");
         address weth = vm.envAddress("WETH_ADDRESS");
         address wbtc = vm.envAddress("WBTC_ADDRESS");
 
-        // Challenge params
         uint256 challengeFee = vm.envOr("CHALLENGE_FEE", uint256(100e6)); // 100 USDC
         uint256 virtualInitial = vm.envOr("VIRTUAL_INITIAL", uint256(10_000e6)); // 10k
         uint256 profitTarget = vm.envOr("PROFIT_TARGET", uint256(11_000e6)); // 11k (10% gain)
 
-        // ── Deploy ──────────────────────────────────────────────────────
-        vm.startBroadcast();
-
-        // 1. Treasury
-        Treasury treasury = new Treasury(usdc, deployer);
-        console.log("Treasury:", address(treasury));
-
-        // 2. AccountFactory
+        // DEX whitelist
         address[] memory dexTargets = new address[](1);
         dexTargets[0] = dexRouter;
 
-        // Common DEX swap selectors
         bytes4[] memory selectors = new bytes4[](2);
         selectors[0] = bytes4(keccak256("swapExactTokensForTokens(uint256,uint256,address[],address,uint256)"));
         selectors[1] = bytes4(keccak256("swap(address,address,uint256)"));
 
         address[] memory tokens = new address[](3);
-        tokens[0] = usdc;
+
+        // ── Deploy ──────────────────────────────────────────────────────
+        vm.startBroadcast(deployerKey);
+
+        TestUSDC tusdc = new TestUSDC(deployer);
+        tokens[0] = address(tusdc);
         tokens[1] = weth;
         tokens[2] = wbtc;
 
-        AccountFactory factory = new AccountFactory(deployer, address(treasury), usdc, dexTargets, selectors, tokens);
-        console.log("AccountFactory:", address(factory));
+        Treasury treasury = new Treasury(address(tusdc), deployer);
+        AccountFactory factory =
+            new AccountFactory(deployer, address(treasury), address(tusdc), dexTargets, selectors, tokens);
+        PropChallenge challenge = new PropChallenge(
+            address(tusdc), address(treasury), deployer, challengeFee, virtualInitial, profitTarget
+        );
 
-        // 3. PropChallenge
-        PropChallenge challenge =
-            new PropChallenge(usdc, address(treasury), deployer, challengeFee, virtualInitial, profitTarget);
-        console.log("PropChallenge:", address(challenge));
-
-        // 4. Wire up
         factory.setPropChallenge(address(challenge));
         challenge.setFactory(address(factory));
-
-        // Set eval tokens
         challenge.setEvalToken(weth, true);
         challenge.setEvalToken(wbtc, true);
 
         vm.stopBroadcast();
 
         // ── Summary ─────────────────────────────────────────────────────
-        console.log("=== Deployment Complete ===");
+        console.log("=== Test Deployment Complete ===");
+        console.log("TestUSDC:       ", address(tusdc));
         console.log("Treasury:       ", address(treasury));
         console.log("AccountFactory: ", address(factory));
         console.log("PropChallenge:  ", address(challenge));
