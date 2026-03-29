@@ -98,11 +98,14 @@ contract TradingAccount is ReentrancyGuard {
     /// @param target The DEX router address.
     /// @param data The calldata (selector + params).
     function execute(address target, bytes calldata data) external onlyTrader nonReentrant {
+        // 라우터 주소 검증
         if (!allowedTargets[target]) revert TargetNotWhitelisted();
 
+        // whitelist 함수 검증
         bytes4 selector = bytes4(data[:4]);
         if (!allowedSelectors[selector]) revert SelectorNotAllowed();
 
+        // 거래 대상 토큰 검증
         _validateTokens(data);
 
         (bool success,) = target.call(data);
@@ -128,6 +131,11 @@ contract TradingAccount is ReentrancyGuard {
         IERC20(usdc).transfer(trader, traderShare);
 
         emit Settled(trader, traderShare, platformShare);
+    }
+
+    // liquidation 로직 추가
+    function _liquidation() internal {
+
     }
 
     /// @notice Force close: swap all tokens back to USDC and return to treasury.

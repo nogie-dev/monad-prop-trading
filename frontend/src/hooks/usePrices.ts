@@ -5,7 +5,14 @@ interface Prices {
   btc: number;
 }
 
-const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin&vs_currencies=usd';
+// monitoring.py price API (run locally or on server)
+const PRICE_API = import.meta.env.VITE_PRICE_API || 'http://localhost:8000/prices';
+
+async function fetchMonitorPrices(): Promise<Prices> {
+  const res = await fetch(PRICE_API);
+  if (!res.ok) throw new Error(`Price API error: ${res.status}`);
+  return res.json() as Promise<Prices>;
+}
 
 export function usePrices(intervalMs = 15_000) {
   const [prices, setPrices] = useState<Prices>({ eth: 0, btc: 0 });
@@ -14,16 +21,14 @@ export function usePrices(intervalMs = 15_000) {
 
   const fetchPrices = useCallback(async () => {
     try {
-      const res = await fetch(COINGECKO_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setPrices({
-        eth: data.ethereum?.usd ?? 0,
-        btc: data.bitcoin?.usd ?? 0,
-      });
+      const p = await fetchMonitorPrices();
+      setPrices(p);
       setError(null);
+      console.log('[usePrices] ETH:', p.eth, 'BTC:', p.btc);
     } catch (err: unknown) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      console.error('[usePrices] fetch failed:', msg);
+      setError(msg);
     } finally {
       setLoading(false);
     }
