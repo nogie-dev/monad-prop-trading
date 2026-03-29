@@ -7,6 +7,14 @@ import {AccountFactory} from "../src/AccountFactory.sol";
 import {PropChallenge} from "../src/PropChallenge.sol";
 
 contract DeployScript is Script {
+    // Toggle individual steps for partial redeploys.
+    // Set to false to reuse existing deployments via env variables.
+    bool public constant DEPLOY_TREASURY = false;
+    bool public constant DEPLOY_FACTORY = false;
+    bool public constant DEPLOY_PROP_CHALLENGE = true;
+    bool public constant WIRE_FACTORY_CHALLENGE = true;
+    bool public constant SET_EVAL_TOKENS = true;
+
     function run() external {
         // ── Config ──────────────────────────────────────────────────────
         address deployer = msg.sender;
@@ -25,46 +33,93 @@ contract DeployScript is Script {
         // ── Deploy ──────────────────────────────────────────────────────
         vm.startBroadcast();
 
-        // 1. Treasury
-        Treasury treasury = new Treasury(usdc, deployer);
-        console.log("Treasury:", address(treasury));
+        address treasury = _deployOrUseTreasury(usdc, deployer);
+        address factory = _deployOrUseFactory(deployer, treasury, usdc, dexRouter, weth, wbtc);
+        address challenge =
+            _deployOrUsePropChallenge(usdc, treasury, deployer, challengeFee, virtualInitial, profitTarget);
 
-        // 2. AccountFactory
-        address[] memory dexTargets = new address[](1);
-        dexTargets[0] = dexRouter;
+        if (WIRE_FACTORY_CHALLENGE) {
+            AccountFactory(factory).setPropChallenge(address(challenge));
+            PropChallenge(challenge).setFactory(factory);
+        }
 
-        // TestRouter selector
-        bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = bytes4(keccak256("swapExactIn(address,address,uint256,uint256,address)"));
-
-        address[] memory tokens = new address[](3);
-        tokens[0] = usdc;
-        tokens[1] = weth;
-        tokens[2] = wbtc;
-
-        AccountFactory factory = new AccountFactory(deployer, address(treasury), usdc, dexTargets, selectors, tokens);
-        console.log("AccountFactory:", address(factory));
-
-        // 3. PropChallenge
-        PropChallenge challenge =
-            new PropChallenge(usdc, address(treasury), deployer, challengeFee, virtualInitial, profitTarget);
-        console.log("PropChallenge:", address(challenge));
-
-        // 4. Wire up
-        factory.setPropChallenge(address(challenge));
-        challenge.setFactory(address(factory));
-
-        // Set eval tokens
-        challenge.setEvalToken(weth, true);
-        challenge.setEvalToken(wbtc, true);
+        if (SET_EVAL_TOKENS) {
+            PropChallenge(challenge).setEvalToken(weth, true);
+            PropChallenge(challenge).setEvalToken(wbtc, true);
+        }
 
         vm.stopBroadcast();
 
         // ── Summary ─────────────────────────────────────────────────────
         console.log("=== Deployment Complete ===");
-        console.log("Treasury:       ", address(treasury));
-        console.log("AccountFactory: ", address(factory));
-        console.log("PropChallenge:  ", address(challenge));
+        console.log("Treasury:       ", treasury);
+        console.log("AccountFactory: ", factory);
+        console.log("PropChallenge:  ", challenge);
         console.log("Owner:          ", deployer);
+    }
+
+    // Deploy Treasury or reuse existing address via env TREASURY_ADDRESS.
+    function _deployOrUseTreasury(address usdc, address owner) internal returns (address) {
+        if (DEPLOY_TREASURY) {
+            Treasury treasury = new Treasury(usdc, owner);
+            console.log("Treasury deployed:", address(treasury));
+            return address(treasury);
+        }
+        address existing = vm.envOr("TREASURY_ADDRESS", address(0));
+        require(existing != address(0), "TREASURY_ADDRESS not set");
+        console.log("Treasury (existing):", existing);
+        return existing;
+    }
+
+    // Deploy AccountFactory or reuse existing via env ACCOUNT_FACTORY_ADDRESS.
+    function _deployOrUseFactory(
+        address owner,
+        address treasury,
+        address usdc,
+        address dexRouter,
+        address weth,
+        address wbtc
+    ) internal returns (address) {
+        if (DEPLOY_FACTORY) {
+            address[] memory dexTargets = new address[](1);
+            dexTargets[0] = dexRouter;
+
+            bytes4[] memory selectors = new bytes4[](1);
+            selectors[0] = bytes4(keccak256("swapExactIn(address,address,uint256,uint256,address)"));
+
+            address[] memory tokens = new address[](3);
+            tokens[0] = usdc;
+            tokens[1] = weth;
+            tokens[2] = wbtc;
+
+            AccountFactory factory = new AccountFactory(owner, treasury, usdc, dexTargets, selectors, tokens);
+            console.log("AccountFactory deployed:", address(factory));
+            return address(factory);
+        }
+        address existing = vm.envOr("ACCOUNT_FACTORY_ADDRESS", address(0));
+        require(existing != address(0), "ACCOUNT_FACTORY_ADDRESS not set");
+        console.log("AccountFactory (existing):", existing);
+        return existing;
+    }
+
+    // Deploy PropChallenge or reuse existing via env PROP_CHALLENGE_ADDRESS.
+    function _deployOrUsePropChallenge(
+        address usdc,
+        address treasury,
+        address owner,
+        uint256 challengeFee,
+        uint256 virtualInitial,
+        uint256 profitTarget
+    ) internal returns (address) {
+        if (DEPLOY_PROP_CHALLENGE) {
+            PropChallenge challenge =
+                new PropChallenge(usdc, treasury, owner, challengeFee, virtualInitial, profitTarget);
+            console.log("PropChallenge deployed:", address(challenge));
+            return address(challenge);
+        }
+        address existing = vm.envOr("PROP_CHALLENGE_ADDRESS", address(0));
+        require(existing != address(0), "PROP_CHALLENGE_ADDRESS not set");
+        console.log("PropChallenge (existing):", existing);
+        return existing;
     }
 }

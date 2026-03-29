@@ -148,16 +148,14 @@ contract PropTradingTest is Test {
         vm.stopPrank();
     }
 
-    function test_maxPositions_reverts() public {
+    function test_openMany_positions() public {
         _setupActiveChallenge(trader);
 
         vm.startPrank(trader);
-        for (uint8 i = 0; i < 5; i++) {
+        // No position limit — open more than 5 without revert
+        for (uint8 i = 0; i < 6; i++) {
             challenge.openPosition(address(weth), true, 100e6, 3000e6);
         }
-
-        vm.expectRevert(PropChallenge.MaxPositionsReached.selector);
-        challenge.openPosition(address(weth), true, 100e6, 3000e6);
         vm.stopPrank();
     }
 

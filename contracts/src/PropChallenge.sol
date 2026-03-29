@@ -120,6 +120,27 @@ contract PropChallenge is Ownable, ReentrancyGuard {
         paFundingAmount = amount;
     }
 
+    // ── Debugging (Owner Only) ──────────────────────────────────────────
+    /// @notice Manually increase a trader's virtual balance. For debugging only.
+    function increaseVirtualBalance(address trader, uint256 amount) external onlyOwner {
+        if (trader == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        if (challengeStatus[trader] == ChallengeStatus.NONE) revert InvalidStatus();
+
+        evalAccounts[trader].virtualBalance += amount;
+    }
+
+    /// @notice Manually decrease a trader's virtual balance. For debugging only.
+    function decreaseVirtualBalance(address trader, uint256 amount) external onlyOwner {
+        if (trader == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        if (challengeStatus[trader] == ChallengeStatus.NONE) revert InvalidStatus();
+
+        EvaluationAccount storage acc = evalAccounts[trader];
+        if (acc.virtualBalance < amount) revert InsufficientVirtualBalance();
+        acc.virtualBalance -= amount;
+    }
+
     // ── Challenge Entry ─────────────────────────────────────────────────
     /// @notice Deposit USDC fee to start a challenge. Fee is non-refundable.
     /// @param amount USDC amount (must equal challengeFee).
@@ -212,7 +233,7 @@ contract PropChallenge is Ownable, ReentrancyGuard {
     // ── Pass / Fail ─────────────────────────────────────────────────────
     /// @notice Pass a trader's challenge and deploy their PA.
     /// @param trader The trader who passed.
-    function passChallenge(address trader) external onlyOwner {
+    function passChallenge(address trader) external {
         if (challengeStatus[trader] != ChallengeStatus.ACTIVE) revert InvalidStatus();
 
         EvaluationAccount storage acc = evalAccounts[trader];
