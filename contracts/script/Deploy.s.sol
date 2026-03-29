@@ -33,10 +33,9 @@ contract DeployScript is Script {
         address[] memory dexTargets = new address[](1);
         dexTargets[0] = dexRouter;
 
-        // Common DEX swap selectors
-        bytes4[] memory selectors = new bytes4[](2);
-        selectors[0] = bytes4(keccak256("swapExactTokensForTokens(uint256,uint256,address[],address,uint256)"));
-        selectors[1] = bytes4(keccak256("swap(address,address,uint256)"));
+        // TestRouter selector
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = bytes4(keccak256("swapExactIn(address,address,uint256,uint256,address)"));
 
         address[] memory tokens = new address[](3);
         tokens[0] = usdc;
