@@ -122,6 +122,14 @@ contract PropChallenge is Ownable, ReentrancyGuard {
 
     // ── Debugging (Owner Only) ──────────────────────────────────────────
     /// @notice Force-activate a challenge for a trader (bypass fee) for debugging.
+    /// @notice Reset a trader's challenge back to NONE. Clears all state. Debug only.
+    function resetChallengeDebug(address trader) external onlyOwner {
+        if (trader == address(0)) revert ZeroAddress();
+        challengeStatus[trader] = ChallengeStatus.NONE;
+        delete evalAccounts[trader];
+        delete _positions[trader];
+    }
+
     function activateChallengeDebug(address trader) external onlyOwner {
         if (trader == address(0)) revert ZeroAddress();
 
