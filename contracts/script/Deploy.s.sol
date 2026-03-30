@@ -30,6 +30,7 @@ contract DeployScript is Script {
         uint256 challengeFee = vm.envOr("CHALLENGE_FEE", uint256(100e6)); // 100 USDC
         uint256 virtualInitial = vm.envOr("VIRTUAL_INITIAL", uint256(10_000e6)); // 10k
         uint256 profitTarget = vm.envOr("PROFIT_TARGET", uint256(11_000e6)); // 11k (10% gain)
+        uint256 paFunding = vm.envOr("PA_FUNDING_AMOUNT", uint256(50_000e6)); // 50k USDC
 
         // ── Deploy ──────────────────────────────────────────────────────
         vm.startBroadcast();
@@ -37,7 +38,7 @@ contract DeployScript is Script {
         address treasury = _deployOrUseTreasury(usdc, deployer);
         address factory = _deployOrUseFactory(deployer, treasury, usdc, dexRouter, weth, wbtc);
         address challenge =
-            _deployOrUsePropChallenge(usdc, treasury, deployer, challengeFee, virtualInitial, profitTarget);
+            _deployOrUsePropChallenge(usdc, treasury, deployer, challengeFee, virtualInitial, profitTarget, paFunding);
 
         if (WIRE_FACTORY_CHALLENGE) {
             AccountFactory(factory).setPropChallenge(address(challenge));
@@ -111,11 +112,12 @@ contract DeployScript is Script {
         address owner,
         uint256 challengeFee,
         uint256 virtualInitial,
-        uint256 profitTarget
+        uint256 profitTarget,
+        uint256 paFunding
     ) internal returns (address) {
         if (DEPLOY_PROP_CHALLENGE) {
             PropChallenge challenge =
-                new PropChallenge(usdc, treasury, owner, challengeFee, virtualInitial, profitTarget);
+                new PropChallenge(usdc, treasury, owner, challengeFee, virtualInitial, profitTarget, paFunding);
             console.log("PropChallenge deployed:", address(challenge));
             return address(challenge);
         }

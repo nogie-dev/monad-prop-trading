@@ -86,7 +86,8 @@ contract PropChallenge is Ownable, ReentrancyGuard {
         address _owner,
         uint256 _challengeFee,
         uint256 _virtualInitialBalance,
-        uint256 _profitTarget
+        uint256 _profitTarget,
+        uint256 _paFundingAmount
     ) Ownable(_owner) {
         if (_usdc == address(0) || _treasury == address(0)) revert ZeroAddress();
         usdc = IERC20(_usdc);
@@ -94,6 +95,7 @@ contract PropChallenge is Ownable, ReentrancyGuard {
         challengeFee = _challengeFee;
         virtualInitialBalance = _virtualInitialBalance;
         profitTarget = _profitTarget;
+        paFundingAmount = _paFundingAmount;
     }
 
     // ── Admin ───────────────────────────────────────────────────────────
