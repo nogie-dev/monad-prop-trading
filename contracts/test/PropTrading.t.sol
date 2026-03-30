@@ -59,7 +59,7 @@ contract PropTradingTest is Test {
         factory = new AccountFactory(owner, address(treasury), address(usdc), dexTargets, selectors, tokens);
 
         // Deploy PropChallenge
-        challenge = new PropChallenge(address(usdc), address(treasury), owner, CHALLENGE_FEE, VIRTUAL_INITIAL, PROFIT_TARGET);
+        challenge = new PropChallenge(address(usdc), address(treasury), owner, CHALLENGE_FEE, VIRTUAL_INITIAL, PROFIT_TARGET, 50_000e6);
 
         // Wire up
         challenge.setFactory(address(factory));

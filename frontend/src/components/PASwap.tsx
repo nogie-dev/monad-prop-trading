@@ -139,7 +139,7 @@ export function PASwap({ paAddress, onSwap }: Props) {
   useEffect(() => {
     const id = setTimeout(() => {
       void fetchPreview(amountIn);
-    }, 400);
+    }, 3000); // 3 seconds
     return () => clearTimeout(id);
   }, [amountIn, fetchPreview]);
 
