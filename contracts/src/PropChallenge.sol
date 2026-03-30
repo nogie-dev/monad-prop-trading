@@ -121,6 +121,21 @@ contract PropChallenge is Ownable, ReentrancyGuard {
     }
 
     // ── Debugging (Owner Only) ──────────────────────────────────────────
+    /// @notice Force-activate a challenge for a trader (bypass fee) for debugging.
+    function activateChallengeDebug(address trader) external onlyOwner {
+        if (trader == address(0)) revert ZeroAddress();
+
+        challengeStatus[trader] = ChallengeStatus.ACTIVE;
+        evalAccounts[trader] = EvaluationAccount({
+            virtualBalance: virtualInitialBalance,
+            initialBalance: virtualInitialBalance,
+            realizedPnL: 0,
+            paActivated: false,
+            openPositionCount: 0
+        });
+        delete _positions[trader];
+    }
+
     /// @notice Manually increase a trader's virtual balance. For debugging only.
     function increaseVirtualBalance(address trader, uint256 amount) external onlyOwner {
         if (trader == address(0)) revert ZeroAddress();
