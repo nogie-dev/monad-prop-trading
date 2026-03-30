@@ -100,3 +100,35 @@ npm run dev
 >
 > - **어떻게 트레이더가 임의로 자금을 이체하지 못하는가**
 > - **화이트리스트 기반으로 DEX 거래만 허용하는 구체적인 메커니즘**
+
+---
+
+## 디버깅 모드 (가상 잔고/상태 강제 조정)
+
+운영/테스트 중 합격·실패 플로우를 빠르게 검증하기 위한 디버그 함수와 스크립트가 있습니다.
+
+- `PropChallenge` 디버그 함수 (owner 전용):
+  - `activateChallengeDebug(address trader)`: 수수료 없이 바로 `ACTIVE` 상태로 초기화.
+  - `increaseVirtualBalance(address trader, uint256 amount)`: 가상 잔고 증가.
+  - `decreaseVirtualBalance(address trader, uint256 amount)`: 가상 잔고 감소.
+
+- 스크립트: `contracts/script/TestDebugTrigger.s.sol`
+  - 토글 플래그로 `activate / increase / decrease / pass / setPaFundingAmount / treasury mint`를 개별 실행.
+  - 예시 실행 (env 필요: `PRIVATE_KEY`, `PROP_CHALLENGE_ADDRESS`, `DEBUG_TRADER`, `DEBUG_AMOUNT` 등):
+    ```sh
+    cd contracts
+    set -a && source ../.env && set +a
+    export DEBUG_TRADER=<트레이더주소>
+    export DEBUG_AMOUNT=<6-decimals USDC 값>
+    forge script script/TestDebugTrigger.s.sol:TestDebugTrigger \
+      --rpc-url "$MONAD_RPC" \
+      --private-key "$PRIVATE_KEY" \
+      --chain-id 10143 \
+      --broadcast
+    ```
+
+디버그 흐름 예시:
+1) `activateChallengeDebug`로 `ACTIVE` 상태 진입.
+2) `increaseVirtualBalance`로 목표(예: 11,000 USDC) 이상으로 올림.
+3) `passChallenge` 호출 → 합격/PA 배포·자금 설정 동작 확인.
+4) `decreaseVirtualBalance`로 실패 조건 확인 등 시나리오 재현.
