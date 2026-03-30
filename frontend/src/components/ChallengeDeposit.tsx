@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { parseUnits } from 'ethers';
 import { useWallet } from '../hooks/useWallet';
 import { useContracts } from '../hooks/useContracts';
 import { ADDRESSES } from '../config/addresses';
-import { USDC_DECIMALS } from '../config/constants';
 
 interface Props {
   challengeStatus: number;

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useContracts } from '../hooks/useContracts';
 import { usePrices, priceToUint256 } from '../hooks/usePrices';
 import { ADDRESSES } from '../config/addresses';
-import { USDC_DECIMALS } from '../config/constants';
 
 interface Props {
   onTrade: () => void;

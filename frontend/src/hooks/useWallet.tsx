@@ -88,11 +88,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!window.ethereum) return;
-    const handleAccountsChanged = (accounts: string[]) => {
+    const handleAccountsChanged = (...args: unknown[]) => {
+      const accounts = args[0] as string[];
       if (accounts.length === 0) disconnect();
       else setAddress(accounts[0]);
     };
-    const handleChainChanged = async (_id: string) => {
+    const handleChainChanged = async (..._args: unknown[]) => {
       // 체인 변경 시 provider/signer 재생성
       const bp = new BrowserProvider(window.ethereum!);
       const network = await bp.getNetwork();

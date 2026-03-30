@@ -29,7 +29,7 @@ export function ChallengePage() {
     isOpen: boolean;
   }>>([]);
   const [profitTarget, setProfitTarget] = useState(0n);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!propChallenge || !address) return;
