@@ -8,7 +8,6 @@ import {TradingAccount} from "./TradingAccount.sol";
 /// @notice Deploys and registers TradingAccount (PA) instances with whitelist config.
 contract AccountFactory is Ownable {
     // ── Errors ──────────────────────────────────────────────────────────
-    error AlreadyHasAccount();
     error NotPropChallenge();
     error ZeroAddress();
 
@@ -23,6 +22,7 @@ contract AccountFactory is Ownable {
     address public propChallenge;
     address public treasury;
     address public usdc;
+    uint256 public deployNonce;
 
     // Whitelist config injected into each new PA
     address[] public allowedDexTargets;
@@ -56,16 +56,12 @@ contract AccountFactory is Ownable {
     /// @return account The deployed TradingAccount address.
     function deployAccount(address trader) external returns (address account) {
         if (msg.sender != propChallenge) revert NotPropChallenge();
-        if (traderToPA[trader] != address(0)) revert AlreadyHasAccount();
+        if (propChallenge == address(0)) revert ZeroAddress();
 
-        TradingAccount pa = new TradingAccount(
-            owner(),
-            trader,
-            treasury,
-            usdc,
-            allowedDexTargets,
-            allowedSelectors,
-            allowedTokens
+        // Use CREATE2 with an ever-increasing salt so each deployment address differs per call.
+        // Set the TradingAccount owner to PropChallenge so it can setInitialCapital/funding flows.
+        TradingAccount pa = new TradingAccount{salt: bytes32(++deployNonce)}(
+            propChallenge, trader, treasury, usdc, allowedDexTargets, allowedSelectors, allowedTokens
         );
 
         account = address(pa);
