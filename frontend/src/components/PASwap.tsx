@@ -174,7 +174,7 @@ export function PASwap({ paAddress, onSwap }: Props) {
         pair.tokenOut,
         amountInBig
       ) as bigint;
-      const minAmountOut = (expectedOut * 995n) / 1000n;
+      const minAmountOut = (expectedOut * 985n) / 1000n; // 1.5% slippage
 
       // Encode calldata for swapExactIn
       const iface = new Interface(TestRouterABI);

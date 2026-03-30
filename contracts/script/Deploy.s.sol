@@ -97,6 +97,7 @@ contract DeployScript is Script {
 
             AccountFactory factory = new AccountFactory(owner, treasury, usdc, dexTargets, selectors, tokens);
             console.log("AccountFactory deployed:", address(factory));
+            console.logBytes4(selectors[0]); // verify: must be 0x7b32b50e (swapExactIn)
             return address(factory);
         }
         address existing = vm.envOr("ACCOUNT_FACTORY_ADDRESS", address(0));

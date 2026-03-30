@@ -33,49 +33,79 @@ contract TestDexDeploy is Script {
     uint256 constant WBTC_POOL     = 750_000_000;       // 7.5 WBTC  ≈ $500k (8 decimals)
 
     function run() external {
+        // Optional toggles (set in env; defaults keep previous behaviour)
+        bool DO_DEPLOY_TOKENS = vm.envOr("DO_DEPLOY_TOKENS", false);   // false → reuse env WETH/WBTC only
+        bool DO_MINT_TOKENS   = vm.envOr("DO_MINT_TOKENS", false);     // false → skip mint to deployer
+        bool DO_MINT_USDC     = vm.envOr("DO_MINT_USDC", false);       // false → skip TestUSDC mint
+        bool DO_DEPLOY_DEX    = vm.envOr("DO_DEPLOY_DEX", false);      // false → reuse env DEX_FACTORY/DEX_ROUTER
+        bool DO_CREATE_POOLS  = vm.envOr("DO_CREATE_POOLS", false);    // false → reuse env POOL_USDC_WETH / POOL_USDC_WBTC
+
         vm.startBroadcast();
         address deployer = msg.sender;
 
-        // ── 1. Deploy WETH & WBTC ────────────────────────────────────────────
-        TestERC20 weth = new TestERC20("Wrapped Ether",   "WETH", 18);
-        TestERC20 wbtc = new TestERC20("Wrapped Bitcoin", "WBTC",  8);
+        // ── 1. Deploy or reuse WETH & WBTC ───────────────────────────────────
+        address wethAddr = vm.envOr("WETH_ADDRESS", address(0));
+        address wbtcAddr = vm.envOr("WBTC_ADDRESS", address(0));
 
-        weth.mint(deployer, WETH_POOL);
-        wbtc.mint(deployer, WBTC_POOL);
+        TestERC20 weth = (wethAddr == address(0) && DO_DEPLOY_TOKENS)
+            ? new TestERC20("Wrapped Ether", "WETH", 18)
+            : TestERC20(wethAddr);
+        TestERC20 wbtc = (wbtcAddr == address(0) && DO_DEPLOY_TOKENS)
+            ? new TestERC20("Wrapped Bitcoin", "WBTC", 8)
+            : TestERC20(wbtcAddr);
+
+        if (address(weth) == address(0) || address(wbtc) == address(0)) {
+            revert("Set WETH_ADDRESS/WBTC_ADDRESS or enable DO_DEPLOY_TOKENS");
+        }
+
+        console.log(wethAddr == address(0) ? "Deployed WETH:" : "Reusing WETH:", address(weth));
+        console.log(wbtcAddr == address(0) ? "Deployed WBTC:" : "Reusing WBTC:", address(wbtc));
+
+        if (DO_MINT_TOKENS) {
+            weth.mint(deployer, WETH_POOL);
+            wbtc.mint(deployer, WBTC_POOL);
+        }
 
         // ── 2. Mint TestUSDC (deployer == owner) ─────────────────────────────
         uint256 totalUsdc = USDC_ETH_POOL + USDC_BTC_POOL; // 866,650 USDC
-        IMintable(USDC).mint(deployer, totalUsdc);
-
-        // ── 3. Deploy factory & router ───────────────────────────────────────
-        TestPoolFactory factory = new TestPoolFactory();
-        TestRouter      router  = new TestRouter(address(factory));
-
-        // ── 4. Create pools ──────────────────────────────────────────────────
-        address ethPool = factory.createPool(USDC, address(weth));
-        address btcPool = factory.createPool(USDC, address(wbtc));
-
-        // ── 5. Seed USDC/WETH pool ───────────────────────────────────────────
-        {
-            // Pool stores token0 < token1 by address; determine correct order.
-            bool usdcFirst = USDC < address(weth);
-            uint256 amt0   = usdcFirst ? USDC_ETH_POOL : WETH_POOL;
-            uint256 amt1   = usdcFirst ? WETH_POOL      : USDC_ETH_POOL;
-
-            IERC20(USDC).approve(ethPool, USDC_ETH_POOL);
-            weth.approve(ethPool, WETH_POOL);
-            TestPool(ethPool).addLiquidity(amt0, amt1);
+        if (DO_MINT_USDC) {
+            IMintable(USDC).mint(deployer, totalUsdc);
         }
 
-        // ── 6. Seed USDC/WBTC pool ───────────────────────────────────────────
-        {
-            bool usdcFirst = USDC < address(wbtc);
-            uint256 amt0   = usdcFirst ? USDC_BTC_POOL : WBTC_POOL;
-            uint256 amt1   = usdcFirst ? WBTC_POOL      : USDC_BTC_POOL;
+        // ── 3. Deploy factory & router ───────────────────────────────────────
+        address factoryEnv = vm.envOr("DEX_FACTORY", address(0));
+        address routerEnv  = vm.envOr("DEX_ROUTER", address(0));
 
-            IERC20(USDC).approve(btcPool, USDC_BTC_POOL);
-            wbtc.approve(btcPool, WBTC_POOL);
-            TestPool(btcPool).addLiquidity(amt0, amt1);
+        TestPoolFactory factory = (factoryEnv == address(0) && DO_DEPLOY_DEX)
+            ? new TestPoolFactory()
+            : TestPoolFactory(factoryEnv);
+        TestRouter router = (routerEnv == address(0) && DO_DEPLOY_DEX)
+            ? new TestRouter(address(factory))
+            : TestRouter(routerEnv);
+
+        if (address(factory) == address(0) || address(router) == address(0)) {
+            revert("Set DEX_FACTORY/DEX_ROUTER or enable DO_DEPLOY_DEX");
+        }
+        console.log(factoryEnv == address(0) ? "TestPoolFactory deployed:" : "Reusing TestPoolFactory:", address(factory));
+        console.log(routerEnv == address(0) ? "TestRouter deployed:     " : "Reusing TestRouter:     ", address(router));
+
+        // ── 4. Create pools ──────────────────────────────────────────────────
+        address ethPool;
+        address btcPool;
+
+        address ethPoolEnv = vm.envOr("POOL_USDC_WETH", address(0));
+        address btcPoolEnv = vm.envOr("POOL_USDC_WBTC", address(0));
+
+        if (DO_CREATE_POOLS) {
+            ethPool = factory.createPool(USDC, address(weth));
+            btcPool = factory.createPool(USDC, address(wbtc));
+        } else {
+            ethPool = ethPoolEnv;
+            btcPool = btcPoolEnv;
+        }
+
+        if (ethPool == address(0) || btcPool == address(0)) {
+            revert("Set POOL_USDC_WETH/POOL_USDC_WBTC or enable DO_CREATE_POOLS");
         }
 
         vm.stopBroadcast();
