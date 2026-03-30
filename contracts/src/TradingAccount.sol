@@ -3,11 +3,12 @@ pragma solidity ^0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @title TradingAccount (Performance Account)
 /// @notice Custom Smart Account holding USDC. Trader has execute() permission only.
 /// @dev NOT ERC-4337. Platform owns the account; trader can only call whitelisted DEX functions.
-contract TradingAccount is ReentrancyGuard {
+contract TradingAccount is ReentrancyGuard, AccessControl {
     // ── Errors ──────────────────────────────────────────────────────────
     error NotOwner();
     error NotTrader();
@@ -49,7 +50,7 @@ contract TradingAccount is ReentrancyGuard {
 
     // ── Constructor ─────────────────────────────────────────────────────
     constructor(
-        address _owner,
+        address _admin,
         address _trader,
         address _treasury,
         address _usdc,
@@ -57,10 +58,17 @@ contract TradingAccount is ReentrancyGuard {
         bytes4[] memory _allowedSelectors,
         address[] memory _allowedTokens
     ) {
-        owner = _owner;
+        owner = _admin;
         trader = _trader;
         treasury = _treasury;
         usdc = _usdc;
+
+        // Roles: admin = PropChallenge, trader = PA trader
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(keccak256("ADMIN_ROLE"), _admin); // convenience role id
+        if (_trader != address(0)) {
+            _grantRole(keccak256("TRADER_ROLE"), _trader);
+        }
 
         for (uint256 i = 0; i < _allowedTargets.length; i++) {
             allowedTargets[_allowedTargets[i]] = true;
@@ -83,12 +91,12 @@ contract TradingAccount is ReentrancyGuard {
 
     // ── Modifiers ───────────────────────────────────────────────────────
     modifier onlyOwner() {
-        if (msg.sender != owner) revert NotOwner();
+        if (!hasRole(keccak256("ADMIN_ROLE"), msg.sender)) revert NotOwner();
         _;
     }
 
     modifier onlyTrader() {
-        if (msg.sender != trader) revert NotTrader();
+        if (!hasRole(keccak256("TRADER_ROLE"), msg.sender)) revert NotTrader();
         if (trader == address(0)) revert TraderAlreadyRevoked();
         _;
     }
@@ -170,6 +178,15 @@ contract TradingAccount is ReentrancyGuard {
         initialCapital = amount;
     }
 
+    /// @notice Admin can update trader (replaces role and address).
+    function setTrader(address newTrader) external onlyOwner {
+        _revokeTrader();
+        trader = newTrader;
+        if (newTrader != address(0)) {
+            _grantRole(keccak256("TRADER_ROLE"), newTrader);
+        }
+    }
+
     // ── Internal ────────────────────────────────────────────────────────
     /// @dev Validate that tokens in swap calldata are whitelisted.
     ///      Decodes common DEX swap signatures: (tokenIn, tokenOut, ...) or path-based.
@@ -190,6 +207,9 @@ contract TradingAccount is ReentrancyGuard {
     function _revokeTrader() internal {
         address oldTrader = trader;
         trader = address(0);
+        if (oldTrader != address(0)) {
+            _revokeRole(keccak256("TRADER_ROLE"), oldTrader);
+        }
         emit TraderRevoked(oldTrader);
     }
 

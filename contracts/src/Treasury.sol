@@ -12,6 +12,7 @@ contract Treasury is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error ZeroAmount();
     error InsufficientBalance();
+    error NotAuthorized();
 
     // ── Events ──────────────────────────────────────────────────────────
     event AccountFunded(address indexed pa, uint256 amount);
@@ -20,16 +21,24 @@ contract Treasury is Ownable, ReentrancyGuard {
 
     // ── State ───────────────────────────────────────────────────────────
     IERC20 public immutable usdc;
+    address public propChallenge;
 
     constructor(address _usdc, address _owner) Ownable(_owner) {
         if (_usdc == address(0)) revert ZeroAddress();
         usdc = IERC20(_usdc);
     }
 
+    /// @notice Set PropChallenge that can trigger funding.
+    function setPropChallenge(address _propChallenge) external onlyOwner {
+        if (_propChallenge == address(0)) revert ZeroAddress();
+        propChallenge = _propChallenge;
+    }
+
     /// @notice Fund a Performance Account with USDC.
     /// @param pa The TradingAccount address.
     /// @param amount USDC amount to transfer.
-    function fundAccount(address pa, uint256 amount) external onlyOwner nonReentrant {
+    function fundAccount(address pa, uint256 amount) external nonReentrant {
+        if (msg.sender != owner() && msg.sender != propChallenge) revert NotAuthorized();
         if (pa == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
         if (usdc.balanceOf(address(this)) < amount) revert InsufficientBalance();
