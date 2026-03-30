@@ -9,8 +9,9 @@ import {PropChallenge} from "../src/PropChallenge.sol";
 contract DeployScript is Script {
     // Toggle individual steps for partial redeploys.
     // Set to false to reuse existing deployments via env variables.
-    bool public constant DEPLOY_TREASURY = false;
-    bool public constant DEPLOY_FACTORY = false;
+    // Full redeploy of Treasury, Factory, and PropChallenge.
+    bool public constant DEPLOY_TREASURY = true;
+    bool public constant DEPLOY_FACTORY = true;
     bool public constant DEPLOY_PROP_CHALLENGE = true;
     bool public constant WIRE_FACTORY_CHALLENGE = true;
     bool public constant SET_EVAL_TOKENS = true;
@@ -41,6 +42,7 @@ contract DeployScript is Script {
         if (WIRE_FACTORY_CHALLENGE) {
             AccountFactory(factory).setPropChallenge(address(challenge));
             PropChallenge(challenge).setFactory(factory);
+            Treasury(treasury).setPropChallenge(challenge);
         }
 
         if (SET_EVAL_TOKENS) {
