@@ -5,6 +5,7 @@ export const ADDRESSES = {
   usdc: import.meta.env.VITE_USDC || '',
   weth: import.meta.env.VITE_WETH || '',
   wbtc: import.meta.env.VITE_WBTC || '',
+  dexRouter: import.meta.env.VITE_DEX_ROUTER || '',
 } as const;
 
 export const MONAD_CHAIN = {
