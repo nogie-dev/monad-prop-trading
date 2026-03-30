@@ -87,6 +87,15 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
             allowedTokens[_allowedTokens[i]] = true;
             _tokenList.push(_allowedTokens[i]);
         }
+
+        // Pre-approve all allowed DEX targets to spend all allowed tokens.
+        // Required because execute() blocks approve() calls, but the router
+        // needs allowance to pull tokens from this PA via safeTransferFrom.
+        for (uint256 i = 0; i < _allowedTokens.length; i++) {
+            for (uint256 j = 0; j < _allowedTargets.length; j++) {
+                IERC20(_allowedTokens[i]).approve(_allowedTargets[j], type(uint256).max);
+            }
+        }
     }
 
     // ── Modifiers ───────────────────────────────────────────────────────
