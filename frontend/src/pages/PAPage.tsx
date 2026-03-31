@@ -18,7 +18,7 @@ export function PAPage() {
   const [paAddress, setPaAddress] = useState<string | null>(null);
   const [initialCapital, setInitialCapital] = useState(0n);
   const [usdcBalance, setUsdcBalance] = useState(0n);
-  const [refreshBalancesFlag, setRefreshBalancesFlag] = useState(0); // triggers PAStatus refresh
+  const [refreshBalancesFlag, setRefreshBalancesFlag] = useState(0);
   const [loading, setLoading] = useState(false);
   const [settling, setSettling] = useState(false);
   const [settleError, setSettleError] = useState<string | null>(null);
@@ -36,11 +36,7 @@ export function PAPage() {
     setLoading(true);
     try {
       const addr = await accountFactory.getAccount(address) as string;
-      if (!addr || addr === ZERO_ADDRESS) {
-        setPaAddress(null);
-      } else {
-        setPaAddress(addr);
-      }
+      setPaAddress(!addr || addr === ZERO_ADDRESS ? null : addr);
     } catch (err) {
       console.error('[PAPage] Failed to fetch PA address:', err);
       setPaAddress(null);
@@ -71,15 +67,8 @@ export function PAPage() {
     }
   }, [paContract, paAddress, provider]);
 
-  useEffect(() => {
-    void fetchPAAddress();
-  }, [fetchPAAddress]);
-
-  useEffect(() => {
-    if (paAddress) {
-      void fetchPADetails();
-    }
-  }, [paAddress, fetchPADetails]);
+  useEffect(() => { void fetchPAAddress(); }, [fetchPAAddress]);
+  useEffect(() => { if (paAddress) void fetchPADetails(); }, [paAddress, fetchPADetails]);
 
   const handleSettle = async () => {
     if (!paContract) return;
@@ -93,12 +82,7 @@ export function PAPage() {
       void fetchPADetails();
     } catch (err: unknown) {
       const typedErr = err as { reason?: string; shortMessage?: string; message?: string };
-      const msg =
-        typedErr.reason ??
-        typedErr.shortMessage ??
-        typedErr.message ??
-        'Settlement failed';
-      setSettleError(msg);
+      setSettleError(typedErr.reason ?? typedErr.shortMessage ?? typedErr.message ?? 'Settlement failed');
     } finally {
       setSettling(false);
     }
@@ -117,26 +101,22 @@ export function PAPage() {
       setRefreshBalancesFlag((x) => x + 1);
     } catch (err: unknown) {
       const typedErr = err as { reason?: string; shortMessage?: string; message?: string };
-      const msg = typedErr.reason ?? typedErr.shortMessage ?? typedErr.message ?? 'Liquidation failed';
-      setLiquidateError(msg);
+      setLiquidateError(typedErr.reason ?? typedErr.shortMessage ?? typedErr.message ?? 'Liquidation failed');
     } finally {
       setLiquidating(false);
     }
   };
 
   const isAdmin = !!address && !!paOwner && address.toLowerCase() === paOwner.toLowerCase();
-
-  const isDrawdownWarning =
-    initialCapital > 0n && usdcBalance < (initialCapital * 90n) / 100n;
-
+  const isDrawdownWarning = initialCapital > 0n && usdcBalance < (initialCapital * 90n) / 100n;
   const canSettle = initialCapital > 0n && usdcBalance > initialCapital;
 
   if (!address) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+      <div className="flex-1 flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-2">PA Dashboard</h2>
-          <p className="text-gray-400">Connect your wallet to access your Performance Account.</p>
+          <h2 className="text-xl font-semibold text-hi mb-2">PA Dashboard</h2>
+          <p className="text-mid text-sm">Connect your wallet to access your Performance Account.</p>
         </div>
       </div>
     );
@@ -144,10 +124,10 @@ export function PAPage() {
 
   if (!isCorrectChain) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+      <div className="flex-1 flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h2 className="text-xl font-bold text-yellow-400 mb-2">Wrong Network</h2>
-          <p className="text-gray-400">Please switch to Monad Testnet.</p>
+          <h2 className="text-base font-semibold text-loss mb-2">Wrong Network</h2>
+          <p className="text-mid text-sm">Please switch to Monad Testnet.</p>
         </div>
       </div>
     );
@@ -155,24 +135,22 @@ export function PAPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-        <p className="text-gray-400">Loading PA data...</p>
+      <div className="flex-1 flex items-center justify-center min-h-screen">
+        <p className="text-mid text-sm">Loading PA data...</p>
       </div>
     );
   }
 
   if (!paAddress) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white">PA Dashboard</h2>
-          <p className="text-gray-400 text-sm mt-1">
-            Live trading with platform-funded Performance Account.
-          </p>
+          <h2 className="text-2xl font-semibold text-hi">PA Dashboard</h2>
+          <p className="text-mid text-sm mt-1">Live trading with platform-funded Performance Account.</p>
         </div>
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-10 text-center">
-          <p className="text-white text-lg font-semibold mb-2">No PA Assigned Yet</p>
-          <p className="text-gray-400 text-sm">
+        <div className="bg-surface border border-line rounded-sm p-10 text-center">
+          <p className="text-hi text-base font-medium mb-2">No PA Assigned Yet</p>
+          <p className="text-mid text-sm">
             Complete the paper trading challenge first. Once you pass, a Performance Account
             will be deployed and funded for you.
           </p>
@@ -182,57 +160,56 @@ export function PAPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white">PA Dashboard</h2>
-        <p className="text-gray-400 text-sm mt-1">
-          Live trading via your platform-funded Performance Account.
-        </p>
+        <h2 className="text-2xl font-semibold text-hi">PA Dashboard</h2>
+        <p className="text-mid text-sm mt-1">Live trading via your platform-funded Performance Account.</p>
       </div>
 
+      {/* Liquidated banner */}
       {isLiquidated && (
-        <div className="mb-4 bg-gray-900 border border-red-700 rounded-lg p-4 flex items-center gap-3">
-          <span className="text-red-500 text-lg">&#9888;</span>
+        <div className="mb-4 border border-loss bg-loss/5 rounded-sm p-4 flex items-center gap-3">
           <div>
-            <p className="text-red-400 font-semibold text-sm">Account Liquidated</p>
-            <p className="text-gray-400 text-xs mt-0.5">
-              This PA has been liquidated due to excessive drawdown. All funds have been returned to the treasury. Trading is disabled.
+            <p className="text-loss font-semibold text-sm">Account Liquidated</p>
+            <p className="text-mid text-xs mt-0.5">
+              This PA was liquidated due to excessive drawdown. All funds returned to treasury. Trading disabled.
             </p>
           </div>
         </div>
       )}
 
+      {/* Drawdown warning */}
       {!isLiquidated && isDrawdownWarning && (
-        <div className="mb-4 bg-red-900/20 border border-red-700/50 rounded-lg p-4">
+        <div className="mb-4 border border-loss/50 bg-loss/5 rounded-sm p-4">
           <div className="flex items-start justify-between gap-4">
-            <p className="text-red-400 text-sm font-medium">
+            <p className="text-loss text-sm">
               Drawdown Warning: Portfolio value is more than 10% below initial capital.
-              The platform may force-liquidate your account.
+              The platform may force-liquidate this account.
             </p>
             {isAdmin && (
               <button
                 onClick={() => { void handleLiquidate(); }}
                 disabled={liquidating}
-                className="flex-shrink-0 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium text-sm transition-colors"
+                className="flex-shrink-0 px-4 py-2 bg-loss text-black hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed rounded-sm text-sm font-medium transition-colors duration-150"
               >
                 {liquidating ? 'Liquidating...' : 'Force Liquidate'}
               </button>
             )}
           </div>
           {liquidateError && (
-            <div className="mt-2 bg-red-900/30 rounded p-2">
-              <p className="text-red-300 text-xs break-words">{liquidateError}</p>
+            <div className="mt-2 border border-loss/30 bg-loss/5 rounded-sm p-2">
+              <p className="text-loss text-xs break-words">{liquidateError}</p>
             </div>
           )}
           {liquidateSuccess && (
-            <div className="mt-2 bg-green-900/20 rounded p-2">
-              <p className="text-green-400 text-xs">{liquidateSuccess}</p>
+            <div className="mt-2 border border-profit/30 bg-profit/5 rounded-sm p-2">
+              <p className="text-profit text-xs">{liquidateSuccess}</p>
             </div>
           )}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         <PAStatus
           paAddress={paAddress}
           initialCapital={initialCapital}
@@ -243,26 +220,23 @@ export function PAPage() {
           paAddress={paAddress}
           disabled={isLiquidated}
           onSwap={() => {
-            void fetchPADetails(); // refresh USDC + initialCapital
-            setRefreshBalancesFlag((x) => x + 1); // trigger PAStatus to refetch all balances
+            void fetchPADetails();
+            setRefreshBalancesFlag((x) => x + 1);
           }}
         />
       </div>
 
-      {/* Settle section */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mb-6">
+      {/* Settle */}
+      <div className="bg-surface border border-line rounded-sm p-6 mb-5">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h3 className="text-base font-semibold text-white mb-1">Settle Account</h3>
-            <p className="text-xs text-gray-400">
-              Settle when profitable to distribute funds: 20% to you, 80% to treasury.
+            <p className="text-xs uppercase tracking-widest text-mid mb-1">Settle Account</p>
+            <p className="text-xs text-mid">
+              Distribute profits: 20% to you, 80% to treasury.
               {!canSettle && initialCapital > 0n && (
-                <span className="text-yellow-400 ml-1">
-                  Requires USDC balance above initial capital of $
-                  {(Number(initialCapital) / 1e6).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                <span className="text-loss ml-1">
+                  Requires balance above initial capital of $
+                  {(Number(initialCapital) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}
             </p>
@@ -270,25 +244,23 @@ export function PAPage() {
           <button
             onClick={() => { void handleSettle(); }}
             disabled={!canSettle || settling || isLiquidated}
-            className="px-5 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium text-sm transition-colors"
+            className="px-5 py-2 bg-profit text-black hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed rounded-sm text-sm font-medium transition-colors duration-150"
           >
             {settling ? 'Settling...' : 'Settle'}
           </button>
         </div>
-
         {settleError && (
-          <div className="mt-3 bg-red-900/20 border border-red-700/50 rounded-lg p-3">
-            <p className="text-red-400 text-sm break-words">{settleError}</p>
+          <div className="mt-3 border border-loss/30 bg-loss/5 rounded-sm p-3">
+            <p className="text-loss text-sm break-words">{settleError}</p>
           </div>
         )}
         {settleSuccess && (
-          <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded-lg p-3">
-            <p className="text-green-400 text-sm">{settleSuccess}</p>
+          <div className="mt-3 border border-profit/30 bg-profit/5 rounded-sm p-3">
+            <p className="text-profit text-sm">{settleSuccess}</p>
           </div>
         )}
       </div>
 
-      {/* Attack demo */}
       <AttackDemo paAddress={paAddress} />
     </div>
   );
@@ -302,9 +274,7 @@ const TRANSFER_SELECTOR_IFACE = new Interface([
   'function transfer(address to, uint256 amount) returns (bool)',
 ]);
 
-interface AttackDemoProps {
-  paAddress: string;
-}
+interface AttackDemoProps { paAddress: string; }
 
 function AttackDemo({ paAddress }: AttackDemoProps) {
   const { address } = useWallet();
@@ -330,11 +300,7 @@ function AttackDemo({ paAddress }: AttackDemoProps) {
       setResult(`UNEXPECTED SUCCESS — security check failed for ${tokenSymbol} transfer`);
     } catch (err: unknown) {
       const typedErr = err as { reason?: string; shortMessage?: string; message?: string };
-      const revertMsg =
-        typedErr.reason ??
-        typedErr.shortMessage ??
-        typedErr.message ??
-        'Reverted (unknown reason)';
+      const revertMsg = typedErr.reason ?? typedErr.shortMessage ?? typedErr.message ?? 'Reverted (unknown reason)';
       setResult(`Reverted as expected: ${revertMsg}`);
     } finally {
       setLoading(false);
@@ -342,33 +308,28 @@ function AttackDemo({ paAddress }: AttackDemoProps) {
   };
 
   return (
-    <div className="bg-gray-800/50 border border-yellow-700/40 rounded-xl p-6">
+    <div className="bg-surface border border-line rounded-sm p-6">
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-yellow-400 mb-1">Attack Demo</h3>
-        <p className="text-xs text-gray-400">
-          These calls intentionally attempt forbidden operations to verify TradingAccount security.
-          Each should revert with SelectorNotAllowed.
+        <p className="text-xs uppercase tracking-widest text-mid mb-1">Security Demo</p>
+        <p className="text-xs text-mid">
+          Verify that TradingAccount rejects forbidden operations. Each call should revert with SelectorNotAllowed.
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <AttackButton
           label="Transfer USDC to self"
-          description="Encodes transfer(address,uint256) on USDC. Should revert: SelectorNotAllowed."
+          description="Encodes transfer(address,uint256) on USDC. Expected: SelectorNotAllowed."
           loading={loadingUsdc}
           result={usdcResult}
-          onClick={() => {
-            void attemptTransfer(ADDRESSES.usdc, 'USDC', setUsdcResult, setLoadingUsdc);
-          }}
+          onClick={() => { void attemptTransfer(ADDRESSES.usdc, 'USDC', setUsdcResult, setLoadingUsdc); }}
         />
         <AttackButton
           label="Transfer WETH to self"
-          description="Encodes transfer(address,uint256) on WETH. Should revert: SelectorNotAllowed."
+          description="Encodes transfer(address,uint256) on WETH. Expected: SelectorNotAllowed."
           loading={loadingWeth}
           result={wethResult}
-          onClick={() => {
-            void attemptTransfer(ADDRESSES.weth, 'WETH', setWethResult, setLoadingWeth);
-          }}
+          onClick={() => { void attemptTransfer(ADDRESSES.weth, 'WETH', setWethResult, setLoadingWeth); }}
         />
       </div>
     </div>
@@ -392,26 +353,24 @@ function AttackButton({ label, description, loading, result, onClick }: AttackBu
   const isUnexpectedSuccess = result?.startsWith('UNEXPECTED');
 
   return (
-    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
-      <p className="text-sm font-medium text-white mb-1">{label}</p>
-      <p className="text-xs text-gray-500 mb-3">{description}</p>
+    <div className="bg-base border border-line rounded-sm p-4">
+      <p className="text-sm font-medium text-hi mb-1">{label}</p>
+      <p className="text-xs text-mid mb-3">{description}</p>
       <button
         onClick={onClick}
         disabled={loading}
-        className="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-yellow-700 hover:bg-yellow-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+        className="w-full py-2 rounded-sm text-sm font-medium transition-colors duration-150 border border-line text-mid hover:border-loss hover:text-loss disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {loading ? 'Attempting...' : 'Attempt Attack'}
       </button>
       {result && (
-        <div
-          className={`mt-2 p-2 rounded text-xs break-words ${
-            isUnexpectedSuccess
-              ? 'bg-red-900/30 border border-red-600/50 text-red-300'
-              : isRevertExpected
-              ? 'bg-green-900/20 border border-green-700/40 text-green-400'
-              : 'bg-gray-800 border border-gray-600 text-gray-400'
-          }`}
-        >
+        <div className={`mt-2 p-2 rounded-sm text-xs break-words border ${
+          isUnexpectedSuccess
+            ? 'border-loss/50 bg-loss/10 text-loss'
+            : isRevertExpected
+            ? 'border-profit/30 bg-profit/5 text-profit'
+            : 'border-line text-mid'
+        }`}>
           {result}
         </div>
       )}

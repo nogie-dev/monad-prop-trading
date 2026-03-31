@@ -65,16 +65,14 @@ export function ChallengePage() {
     }
   }, [propChallenge, address]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (!address) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-2">Paper Trading Challenge</h2>
-          <p className="text-gray-400">Connect your wallet to get started</p>
+          <h2 className="text-xl font-semibold text-hi mb-2">Paper Trading Challenge</h2>
+          <p className="text-mid text-sm">Connect your wallet to get started.</p>
         </div>
       </div>
     );
@@ -82,26 +80,25 @@ export function ChallengePage() {
 
   if (!isCorrectChain) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h2 className="text-xl font-bold text-yellow-400 mb-2">Wrong Network</h2>
-          <p className="text-gray-400">Please switch to Monad Testnet</p>
+          <h2 className="text-base font-semibold text-loss mb-2">Wrong Network</h2>
+          <p className="text-mid text-sm">Please switch to Monad Testnet.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white">Paper Trading Challenge</h2>
-        <p className="text-gray-400 text-sm mt-1">
+        <h2 className="text-2xl font-semibold text-hi">Paper Trading Challenge</h2>
+        <p className="text-mid text-sm mt-1">
           Trade with virtual funds. Hit 10% profit to unlock your Performance Account.
         </p>
       </div>
 
-      {/* Status */}
-      <div className="mb-6">
+      <div className="mb-5">
         <EvalStatus
           evalAccount={evalAccount}
           profitTarget={profitTarget}
@@ -113,11 +110,10 @@ export function ChallengePage() {
         />
       </div>
 
-      {/* Deposit or Trading */}
       {challengeStatus !== 1 ? (
         <ChallengeDeposit challengeStatus={challengeStatus} onSuccess={fetchData} />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-1">
             <TradingPanel onTrade={fetchData} />
           </div>
