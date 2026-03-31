@@ -46,10 +46,12 @@
 - [x] TestRouter ABI — src/abi/TestRouter.ts
 - [x] dexRouter added to ADDRESSES config
 
-## Phase 4: Demo & Polish [NOT STARTED]
-- [ ] End-to-end demo scenario rehearsal
-- [ ] Pitch deck / presentation slides
-- [ ] README.md with project description + screenshots
+## Phase 4: Monitoring & Liquidation [COMPLETE]
+- [x] Discover PAs dynamically (AccountFactory.getAllAccounts) instead of static MONITOR_TRADERS
+- [x] Monitor portfolios with monitoring.py price feed (Chainlink) to value USDC/WETH/WBTC and compute drawdown/thresholds
+- [x] Frontend: show liquidation reference price (Chainlink) alongside pool-priced P&L (DEX getAmountOut)
+- [x] Liquidation entrypoint (onlyAdmin): liquidate(dexTarget) swaps WETH/WBTC → USDC via router, leaves 1 wei dust, emits Liquidated event
+- [x] PA pre-approves router in constructor; liquidate() uses best-effort swap (0 minAmountOut), emits LiquidationSwapFailed on failure
 
 ---
 
@@ -59,3 +61,5 @@
 2026-03-26 23:00 | Phase 1 contracts complete: 4 contracts (TradingAccount, AccountFactory, PropChallenge, Treasury) + 24 tests all passing + Deploy.s.sol | Next: testnet deployment, then Phase 2 frontend
 2026-03-27 | Phase 2 frontend complete: Vite+React+Tailwind setup, wallet connection (MetaMask/Monad), CoinGecko price feed, challenge deposit UI, trading panel (open/close positions), P&L display with progress bar, contract ABIs extracted | Next: Phase 3 PA Dashboard
 2026-03-30 | Phase 3 PA Dashboard complete: TestRouter ABI, dexRouter address config, PAStatus (balances + P&L), PASwap (4 token pairs via TradingAccount.execute), PAPage (settle + drawdown warning + attack demo), Header tab nav, App.tsx routing, pre-existing TS errors fixed | Next: Phase 4 demo polish
+2026-03-31 | Phase 4 Monitoring & Liquidation complete: TradingAccount.liquidate(dexTarget) with 1wei dust + LiquidationSwapFailed event, TradingAccount role split (owner=platform, challenger=PropChallenge for setInitialCapital), monitoring.py getAllAccounts() dynamic discovery + PA drawdown auto-liquidate, PAStatus pool price display (DEX getAmountOut), PAPage Force Liquidate button (admin only), 24/24 tests passing | Next: additional features (faucet, leaderboard)
+2026-03-31 | Fix liquidation root cause: redeployed all contracts so AccountFactory.owner()=EOA (0x2637C325), new PAs now receive ADMIN_ROLE to deployer EOA instead of PropChallenge. monitoring.py liquidate() flow now works directly. PropChallenge: 0x41Fe5dd2b0b606383028bC0c951842E94db53953, AccountFactory: 0x2dc014Fe3235Daf0A99851C52B0fD10AFa8c1B60, Treasury: 0xE7Ae0975289729706Ca44C279f0EE75643c4e038 | Next: full demo run
