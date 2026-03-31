@@ -30,6 +30,8 @@ interface Props {
   challengeStatus: number;
   positions: Position[];
   prices: Prices;
+  onRefresh?: () => void;
+  onPositionsRefresh?: () => void;
 }
 
 function calcPositionCurrentValue(pos: Position, prices: Prices): number {
@@ -38,18 +40,20 @@ function calcPositionCurrentValue(pos: Position, prices: Prices): number {
     : pos.token.toLowerCase() === ADDRESSES.wbtc.toLowerCase() ? prices.btc
     : 0;
   if (!curPrice || pos.entryPrice === 0n) return Number(pos.size) / 1e6;
-
   const sizeNum = Number(pos.size) / 1e6;
   const entryPriceNum = Number(pos.entryPrice) / 1e18;
-
-  if (pos.isLong) {
-    return sizeNum * curPrice / entryPriceNum;
-  } else {
-    return Math.max(0, 2 * sizeNum - sizeNum * curPrice / entryPriceNum);
-  }
+  if (pos.isLong) return sizeNum * curPrice / entryPriceNum;
+  return Math.max(0, 2 * sizeNum - sizeNum * curPrice / entryPriceNum);
 }
 
-export function EvalStatus({ evalAccount, profitTarget, challengeStatus, positions, prices }: Props) {
+const STATUS_LABEL = ['None', 'Active', 'Passed', 'Failed'];
+const STATUS_CLASS: Record<number, string> = {
+  1: 'border-accent2/40 bg-accent2/10 text-accent2',
+  2: 'border-profit/40 bg-profit/10 text-profit',
+  3: 'border-loss/40 bg-loss/10 text-loss',
+};
+
+export function EvalStatus({ evalAccount, profitTarget, challengeStatus, positions, prices, onRefresh, onPositionsRefresh }: Props) {
   const { propChallenge } = useContracts();
   const { address } = useWallet();
   const [passing, setPassing] = useState(false);
@@ -61,12 +65,7 @@ export function EvalStatus({ evalAccount, profitTarget, challengeStatus, positio
   const cashBalance = Number(evalAccount.virtualBalance) / 1e6;
   const initial = Number(evalAccount.initialBalance) / 1e6;
   const target = Number(profitTarget) / 1e6;
-
-  // 보유 포지션 현재 가치 합산
-  const openPositionValue = positions
-    .filter((p) => p.isOpen)
-    .reduce((sum, p) => sum + calcPositionCurrentValue(p, prices), 0);
-
+  const openPositionValue = positions.filter((p) => p.isOpen).reduce((sum, p) => sum + calcPositionCurrentValue(p, prices), 0);
   const totalValue = cashBalance + openPositionValue;
   const pnl = totalValue - initial;
   const pnlPercent = initial > 0 ? (pnl / initial) * 100 : 0;
@@ -74,16 +73,7 @@ export function EvalStatus({ evalAccount, profitTarget, challengeStatus, positio
     ? Math.min(((totalValue - initial) / (target - initial)) * 100, 100)
     : 0;
   const progressClamped = Math.max(0, progress);
-
   const openCount = positions.filter((p) => p.isOpen).length;
-
-  const statusLabel = ['None', 'Active', 'Passed', 'Failed'][challengeStatus] ?? 'Unknown';
-  const statusColor: Record<number, string> = {
-    1: 'text-blue-400',
-    2: 'text-green-400',
-    3: 'text-red-400',
-  };
-
   const canPass = challengeStatus === 1 && totalValue >= target && !!propChallenge && !!address;
   const isPassed = challengeStatus === 2;
   const isFailed = challengeStatus === 3;
@@ -96,8 +86,7 @@ export function EvalStatus({ evalAccount, profitTarget, challengeStatus, positio
     try {
       const tx = await propChallenge.passChallenge(address);
       await tx.wait();
-      setSuccess('Pass submitted. PA deployment/funding in progress.');
-      // Force refresh of status/positions to reflect PASSED immediately
+      setSuccess('Pass submitted. PA deployment in progress.');
       void Promise.all([onRefresh?.(), onPositionsRefresh?.()]);
     } catch (err: unknown) {
       const msg = (err as { reason?: string; shortMessage?: string; message?: string }).reason
@@ -111,83 +100,76 @@ export function EvalStatus({ evalAccount, profitTarget, challengeStatus, positio
   };
 
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
+    <div className="bg-surface border border-line rounded-sm p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white">Evaluation Status</h2>
-        <span className={`text-sm font-medium ${statusColor[challengeStatus] ?? 'text-gray-400'}`}>
-          {statusLabel}
+        <p className="text-xs uppercase tracking-widest text-mid">Evaluation Status</p>
+        <span className={`text-xs px-2 py-0.5 rounded-sm border font-medium ${STATUS_CLASS[challengeStatus] ?? 'border-line text-mid'}`}>
+          {STATUS_LABEL[challengeStatus] ?? 'Unknown'}
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        <div>
-          <p className="text-xs text-gray-500 mb-1">Cash Balance</p>
-          <p className="text-base font-mono text-white">${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 mb-1">Portfolio Value</p>
-          <p className="text-base font-mono text-white">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 mb-1">Unrealized P&L</p>
-          <p className={`text-base font-mono ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} ({pnlPercent.toFixed(2)}%)
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 mb-1">Open Positions</p>
-          <p className="text-base font-mono text-white">{openCount}</p>
-        </div>
+      {/* Stats grid */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        {[
+          { label: 'Cash Balance', value: `$${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: '' },
+          { label: 'Portfolio Value', value: `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: '' },
+          { label: 'Unrealized P&L', value: `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`, color: pnl >= 0 ? 'text-profit' : 'text-loss' },
+          { label: 'Open Positions', value: String(openCount), color: '' },
+        ].map(({ label, value, color }) => (
+          <div key={label}>
+            <p className="text-xs text-mid mb-1">{label}</p>
+            <p className={`text-sm font-mono tabular-nums text-hi ${color}`}>{value}</p>
+          </div>
+        ))}
       </div>
 
+      {/* Progress */}
       <div>
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <div className="flex justify-between text-xs text-mid mb-1.5">
           <span>Progress to Target</span>
-          <span>${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} / ${target.toLocaleString()}</span>
+          <span className="font-mono tabular-nums">
+            ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} / ${target.toLocaleString()}
+          </span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-2">
+        <div className="w-full bg-base border border-line rounded-none h-1.5">
           <div
-            className={`h-2 rounded-full transition-all duration-500 ${
-              progressClamped >= 100 ? 'bg-green-500' : 'bg-purple-500'
-            }`}
+            className={`h-1.5 transition-all duration-500 ${progressClamped >= 100 ? 'bg-profit' : 'bg-accent'}`}
             style={{ width: `${progressClamped}%` }}
           />
         </div>
       </div>
 
       {error && (
-        <div className="mt-3 text-xs text-red-400 bg-red-900/20 border border-red-700/40 rounded p-2">
-          {error}
+        <div className="mt-3 border border-loss/30 bg-loss/5 rounded-sm p-2">
+          <p className="text-loss text-xs">{error}</p>
         </div>
       )}
       {success && (
-        <div className="mt-3 text-xs text-green-400 bg-green-900/20 border border-green-700/40 rounded p-2">
-          {success}
+        <div className="mt-3 border border-profit/30 bg-profit/5 rounded-sm p-2">
+          <p className="text-profit text-xs">{success}</p>
         </div>
       )}
 
       {challengeStatus === 1 && (
         <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="text-xs text-gray-400">
-            Profit target reached? Click Pass to request PA deployment.
-          </div>
+          <p className="text-xs text-mid">Profit target reached? Request PA deployment.</p>
           <button
             onClick={handlePass}
             disabled={!canPass || passing}
-            className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors"
+            className="px-4 py-2 bg-profit text-black hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed rounded-sm text-sm font-medium transition-colors duration-150"
           >
             {passing ? 'Submitting...' : 'Pass Challenge'}
           </button>
         </div>
       )}
       {isPassed && (
-        <div className="mt-4 text-xs text-green-400 bg-green-900/20 border border-green-700/40 rounded p-2">
-          Challenge already passed. PA should be active/funding in progress.
+        <div className="mt-4 border border-profit/30 bg-profit/5 rounded-sm p-2">
+          <p className="text-profit text-xs">Challenge passed. PA is active.</p>
         </div>
       )}
       {isFailed && (
-        <div className="mt-4 text-xs text-red-400 bg-red-900/20 border border-red-700/40 rounded p-2">
-          Challenge failed. Please restart a new challenge to try again.
+        <div className="mt-4 border border-loss/30 bg-loss/5 rounded-sm p-2">
+          <p className="text-loss text-xs">Challenge failed. Restart a new challenge to try again.</p>
         </div>
       )}
     </div>
