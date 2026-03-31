@@ -14,9 +14,12 @@ contract AccountFactory is Ownable {
     // ── Events ──────────────────────────────────────────────────────────
     event AccountDeployed(address indexed trader, address indexed account);
     event WhitelistUpdated();
+    event AccountRemoved(address indexed trader, address indexed account);
 
     // ── State ───────────────────────────────────────────────────────────
     mapping(address => address) public traderToPA;
+    mapping(address => address) public paToTrader;
+    mapping(address => bool) public isActivePA;
     address[] public allPAs;
 
     address public propChallenge;
@@ -61,11 +64,15 @@ contract AccountFactory is Ownable {
         // Use CREATE2 with an ever-increasing salt so each deployment address differs per call.
         // Set the TradingAccount owner to PropChallenge so it can setInitialCapital/funding flows.
         TradingAccount pa = new TradingAccount{salt: bytes32(++deployNonce)}(
-            propChallenge, trader, treasury, usdc, allowedDexTargets, allowedSelectors, allowedTokens
+            owner(),        // platform admin (forceClose/liquidate)
+            propChallenge,  // challenger (setInitialCapital)
+            trader, treasury, usdc, allowedDexTargets, allowedSelectors, allowedTokens
         );
 
         account = address(pa);
         traderToPA[trader] = account;
+        paToTrader[account] = trader;
+        isActivePA[account] = true;
         allPAs.push(account);
 
         emit AccountDeployed(trader, account);
@@ -80,6 +87,23 @@ contract AccountFactory is Ownable {
     /// @notice Get all deployed PA addresses.
     function getAllAccounts() external view returns (address[] memory) {
         return allPAs;
+    }
+
+    /// @notice Get all active PA addresses (filters out deactivated ones).
+    function getAllActiveAccounts() external view returns (address[] memory) {
+        uint256 len = allPAs.length;
+        uint256 activeCount;
+        for (uint256 i = 0; i < len; i++) {
+            if (isActivePA[allPAs[i]]) activeCount++;
+        }
+
+        address[] memory res = new address[](activeCount);
+        uint256 idx;
+        for (uint256 i = 0; i < len; i++) {
+            address pa = allPAs[i];
+            if (isActivePA[pa]) res[idx++] = pa;
+        }
+        return res;
     }
 
     /// @notice Get count of deployed PAs.
@@ -98,5 +122,18 @@ contract AccountFactory is Ownable {
         allowedSelectors = _selectors;
         allowedTokens = _tokens;
         emit WhitelistUpdated();
+    }
+
+    /// @notice Deactivate a PA so monitors can ignore it; clears trader mapping if pointing to this PA.
+    function deactivateAccount(address account) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        if (!isActivePA[account]) return; // already inactive, no-op
+
+        isActivePA[account] = false;
+        address trader = paToTrader[account];
+        if (traderToPA[trader] == account) {
+            traderToPA[trader] = address(0);
+        }
+        emit AccountRemoved(trader, account);
     }
 }

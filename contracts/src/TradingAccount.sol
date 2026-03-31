@@ -25,12 +25,15 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
     event Settled(address indexed trader, uint256 traderShare, uint256 platformShare);
     event ForceClosed(address indexed trader, uint256 amountReturned);
     event TraderRevoked(address indexed trader);
+    event Liquidated(address indexed trader, uint256 usdcReturned);
+    event LiquidationSwapFailed(address indexed token, uint256 amount);
 
     // ── State ───────────────────────────────────────────────────────────
     address public owner;
     address public trader;
     address public treasury;
     address public usdc;
+    address public challenger; // PropChallenge — can call setInitialCapital
     uint256 public initialCapital;
 
     mapping(address => bool) public allowedTargets;
@@ -48,9 +51,13 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
     bytes4 private constant APPROVE_SELECTOR = 0x095ea7b3;
     bytes4 private constant TRANSFER_FROM_SELECTOR = 0x23b872dd;
 
+    // swapExactIn(address,address,uint256,uint256,address) = 0x7b32b50e
+    bytes4 private constant SWAP_EXACT_IN = bytes4(keccak256("swapExactIn(address,address,uint256,uint256,address)"));
+
     // ── Constructor ─────────────────────────────────────────────────────
     constructor(
-        address _admin,
+        address _admin,      // platform owner — can forceClose/liquidate/revokeTrader
+        address _challenger, // PropChallenge — can call setInitialCapital
         address _trader,
         address _treasury,
         address _usdc,
@@ -62,10 +69,11 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
         trader = _trader;
         treasury = _treasury;
         usdc = _usdc;
+        challenger = _challenger;
 
-        // Roles: admin = PropChallenge, trader = PA trader
+        // Roles: admin = platform owner, trader = PA trader
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(keccak256("ADMIN_ROLE"), _admin); // convenience role id
+        _grantRole(keccak256("ADMIN_ROLE"), _admin);
         if (_trader != address(0)) {
             _grantRole(keccak256("TRADER_ROLE"), _trader);
         }
@@ -150,23 +158,49 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
         emit Settled(trader, traderShare, platformShare);
     }
 
-    // liquidation 로직 추가
-    function _liquidation() internal {
+    /// @notice Force liquidate: swap all non-USDC tokens to USDC via DEX, then return all to treasury.
+    /// @dev onlyOwner. Leaves 1 wei dust per non-USDC token to avoid zero-balance reverts.
+    ///      Swap failures are tolerated (emits LiquidationSwapFailed) so liquidation always completes.
+    /// @param dexTarget Whitelisted DEX router to use for swaps.
+    function liquidate(address dexTarget) external onlyOwner nonReentrant {
+        if (!allowedTargets[dexTarget]) revert TargetNotWhitelisted();
 
+        // Swap each non-USDC token to USDC (best-effort, 0 minAmountOut)
+        for (uint256 i = 0; i < _tokenList.length; i++) {
+            address token = _tokenList[i];
+            if (token == usdc) continue;
+
+            uint256 bal = IERC20(token).balanceOf(address(this));
+            if (bal <= 1) continue; // leave 1 wei dust
+
+            bytes memory data = abi.encodeWithSelector(
+                SWAP_EXACT_IN,
+                token,
+                usdc,
+                bal - 1, // leave 1 wei dust
+                0,       // minAmountOut = 0: accept any price, liquidation is forced
+                address(this)
+            );
+            (bool ok,) = dexTarget.call(data);
+            if (!ok) emit LiquidationSwapFailed(token, bal - 1);
+        }
+
+        uint256 usdcBal = IERC20(usdc).balanceOf(address(this));
+        if (usdcBal > 0) IERC20(usdc).transfer(treasury, usdcBal);
+
+        address _trader = trader;
+        _revokeTrader();
+        emit Liquidated(_trader, usdcBal);
     }
 
-    /// @notice Force close: swap all tokens back to USDC and return to treasury.
+    /// @notice Force close: transfer all USDC to treasury and revoke trader.
+    /// @dev Use liquidate() instead if PA holds non-USDC tokens.
     function forceClose() external onlyOwner nonReentrant {
-        // NOTE: In production, would swap non-USDC tokens via DEX here.
-        // For MVP, assume all value is already in USDC.
         uint256 usdcBalance = IERC20(usdc).balanceOf(address(this));
         if (usdcBalance == 0) revert NoFundsToClose();
 
         IERC20(usdc).transfer(treasury, usdcBalance);
-
         emit ForceClosed(trader, usdcBalance);
-
-        // Revoke trader access
         _revokeTrader();
     }
 
@@ -183,7 +217,8 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
     }
 
     /// @notice Set initial capital (called once when Treasury funds the account).
-    function setInitialCapital(uint256 amount) external onlyOwner {
+    function setInitialCapital(uint256 amount) external {
+        if (!hasRole(keccak256("ADMIN_ROLE"), msg.sender) && msg.sender != challenger) revert NotOwner();
         initialCapital = amount;
     }
 
