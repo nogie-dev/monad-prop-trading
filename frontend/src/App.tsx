@@ -11,9 +11,11 @@ function App() {
 
   return (
     <WalletProvider>
-      <div className="min-h-screen bg-[#0a0b0f]">
+      <div className="flex min-h-screen bg-base text-hi">
         <Header page={page} setPage={setPage} />
-        {page === 'challenge' ? <ChallengePage /> : <PAPage />}
+        <main className="flex-1 min-h-screen overflow-auto">
+          {page === 'challenge' ? <ChallengePage /> : <PAPage />}
+        </main>
       </div>
     </WalletProvider>
   );
