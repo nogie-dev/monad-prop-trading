@@ -35,6 +35,7 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
     address public usdc;
     address public challenger; // PropChallenge — can call setInitialCapital
     uint256 public initialCapital;
+    bool public isLiquidated; // set to true when liquidate() is called (drawdown)
 
     mapping(address => bool) public allowedTargets;
     mapping(bytes4 => bool) public allowedSelectors;
@@ -189,6 +190,7 @@ contract TradingAccount is ReentrancyGuard, AccessControl {
         if (usdcBal > 0) IERC20(usdc).transfer(treasury, usdcBal);
 
         address _trader = trader;
+        isLiquidated = true;
         _revokeTrader();
         emit Liquidated(_trader, usdcBal);
     }
