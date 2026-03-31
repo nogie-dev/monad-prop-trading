@@ -1,12 +1,11 @@
-import { useState } from 'react';
-import { Contract } from 'ethers';
+import { useState, useEffect, useCallback } from 'react';
+import { Contract, JsonRpcProvider } from 'ethers';
 import { useWallet } from '../hooks/useWallet';
 import { useContracts } from '../hooks/useContracts';
-import { ADDRESSES } from '../config/addresses';
-import { ERC20ABI } from '../abi/ERC20';
+import { ADDRESSES, MONAD_CHAIN } from '../config/addresses';
+import { USDCFaucetABI } from '../abi/USDCFaucet';
 
-const MINT_AMOUNT = 100n * 1_000_000n;       // 100 USDC (6 decimals)
-const VIRTUAL_AMOUNT = 1_000n * 1_000_000n;  // 1,000 USDC (6 decimals)
+const VIRTUAL_AMOUNT = 1_000n * 1_000_000n; // 1,000 USDC (6 decimals)
 
 interface ActionState {
   loading: boolean;
@@ -16,18 +15,47 @@ interface ActionState {
 
 const defaultState = (): ActionState => ({ loading: false, result: null, error: null });
 
+function formatCooldown(seconds: number): string {
+  if (seconds <= 0) return '';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 export function DebugPage() {
-  const { address, signer } = useWallet();
+  const { address, signer, provider } = useWallet();
   const { propChallenge } = useContracts();
 
-  const [mintState, setMintState] = useState<ActionState>(defaultState());
+  const [faucetState, setFaucetState] = useState<ActionState>(defaultState());
   const [increaseState, setIncreaseState] = useState<ActionState>(defaultState());
   const [decreaseState, setDecreaseState] = useState<ActionState>(defaultState());
+  const [cooldown, setCooldown] = useState<number>(0);
 
-  const run = async (
-    setState: (s: ActionState) => void,
-    fn: () => Promise<string>
-  ) => {
+  const fetchCooldown = useCallback(async () => {
+    if (!address || !ADDRESSES.faucet) return;
+    try {
+      const rpc = provider ?? new JsonRpcProvider(MONAD_CHAIN.rpcUrl);
+      const faucet = new Contract(ADDRESSES.faucet, USDCFaucetABI, rpc);
+      const remaining = await faucet.cooldownRemaining(address) as bigint;
+      setCooldown(Number(remaining));
+    } catch {
+      setCooldown(0);
+    }
+  }, [address, provider]);
+
+  useEffect(() => {
+    void fetchCooldown();
+  }, [fetchCooldown]);
+
+  // tick cooldown down every second
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const run = async (setState: (s: ActionState) => void, fn: () => Promise<string>) => {
     setState({ loading: true, result: null, error: null });
     try {
       const result = await fn();
@@ -39,13 +67,15 @@ export function DebugPage() {
     }
   };
 
-  const handleMint = () =>
-    run(setMintState, async () => {
+  const handleDrip = () =>
+    run(setFaucetState, async () => {
       if (!address || !signer) throw new Error('Wallet not connected');
-      const usdc = new Contract(ADDRESSES.usdc, ERC20ABI, signer);
-      const tx = await usdc.mint(address, MINT_AMOUNT);
+      if (!ADDRESSES.faucet) throw new Error('Faucet address not configured');
+      const faucet = new Contract(ADDRESSES.faucet, USDCFaucetABI, signer);
+      const tx = await faucet.drip();
       await tx.wait();
-      return `Minted 100 tUSDC to ${address.slice(0, 6)}...${address.slice(-4)}`;
+      await fetchCooldown();
+      return `Received 100 tUSDC → ${address.slice(0, 6)}...${address.slice(-4)}`;
     });
 
   const handleIncrease = () =>
@@ -53,7 +83,7 @@ export function DebugPage() {
       if (!propChallenge || !address) throw new Error('Contract or wallet not ready');
       const tx = await propChallenge.increaseVirtualBalance(address, VIRTUAL_AMOUNT);
       await tx.wait();
-      return `Increased virtual balance by $1,000 for ${address.slice(0, 6)}...${address.slice(-4)}`;
+      return `+$1,000 virtual balance applied to ${address.slice(0, 6)}...${address.slice(-4)}`;
     });
 
   const handleDecrease = () =>
@@ -61,40 +91,45 @@ export function DebugPage() {
       if (!propChallenge || !address) throw new Error('Contract or wallet not ready');
       const tx = await propChallenge.decreaseVirtualBalance(address, VIRTUAL_AMOUNT);
       await tx.wait();
-      return `Decreased virtual balance by $1,000 for ${address.slice(0, 6)}...${address.slice(-4)}`;
+      return `−$1,000 virtual balance applied to ${address.slice(0, 6)}...${address.slice(-4)}`;
     });
+
+  const faucetReady = cooldown === 0;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h2 className="text-2xl font-semibold text-hi">Debug</h2>
         <p className="text-mid text-sm mt-1">
-          Development utilities for testing the platform without going through the full flow.
+          Development utilities for testing without going through the full flow.
         </p>
       </div>
 
-      {!address && (
+      {!address ? (
         <div className="border border-line rounded-sm p-4 text-mid text-sm">
           Connect your wallet to use debug tools.
         </div>
-      )}
-
-      {address && (
+      ) : (
         <div className="space-y-4">
 
-          {/* Mint tUSDC */}
+          {/* Faucet */}
           <DebugCard
-            title="Mint tUSDC"
-            description="Mint 100 tUSDC directly to your connected wallet. Uses the public mint() on the TestUSDC contract."
-            buttonLabel="Mint 100 tUSDC"
-            state={mintState}
-            onClick={handleMint}
+            title="tUSDC Faucet"
+            description="Claim 100 tUSDC from the on-chain faucet. 1-hour cooldown per address."
+            buttonLabel={
+              faucetReady
+                ? 'Claim 100 tUSDC'
+                : `Cooldown: ${formatCooldown(cooldown)}`
+            }
+            state={faucetState}
+            onClick={handleDrip}
+            disabled={!faucetReady}
           />
 
           {/* Increase virtual balance */}
           <DebugCard
             title="Increase Virtual Balance"
-            description="Call increaseVirtualBalance(+$1,000) on PropChallenge for your address. Account must have an active challenge."
+            description="Call increaseVirtualBalance(+$1,000) on PropChallenge. Account must have an active challenge."
             buttonLabel="+$1,000 Virtual Balance"
             state={increaseState}
             onClick={handleIncrease}
@@ -104,7 +139,7 @@ export function DebugPage() {
           {/* Decrease virtual balance */}
           <DebugCard
             title="Decrease Virtual Balance"
-            description="Call decreaseVirtualBalance(−$1,000) on PropChallenge for your address. Account must have sufficient virtual balance."
+            description="Call decreaseVirtualBalance(−$1,000) on PropChallenge. Account must have sufficient virtual balance."
             buttonLabel="−$1,000 Virtual Balance"
             state={decreaseState}
             onClick={handleDecrease}
@@ -127,10 +162,11 @@ interface DebugCardProps {
   buttonLabel: string;
   state: ActionState;
   onClick: () => void;
+  disabled?: boolean;
   variant?: 'default' | 'profit' | 'loss';
 }
 
-function DebugCard({ title, description, buttonLabel, state, onClick, variant = 'default' }: DebugCardProps) {
+function DebugCard({ title, description, buttonLabel, state, onClick, disabled = false, variant = 'default' }: DebugCardProps) {
   const btnClass = {
     default: 'bg-accent text-black hover:brightness-110',
     profit: 'bg-profit text-black hover:brightness-110',
@@ -146,7 +182,7 @@ function DebugCard({ title, description, buttonLabel, state, onClick, variant = 
         </div>
         <button
           onClick={onClick}
-          disabled={state.loading}
+          disabled={state.loading || disabled}
           className={`flex-shrink-0 px-4 py-2 rounded-sm text-sm font-medium transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${btnClass}`}
         >
           {state.loading ? 'Pending...' : buttonLabel}

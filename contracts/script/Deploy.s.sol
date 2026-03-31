@@ -5,6 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {Treasury} from "../src/Treasury.sol";
 import {AccountFactory} from "../src/AccountFactory.sol";
 import {PropChallenge} from "../src/PropChallenge.sol";
+import {USDCFaucet} from "../src/USDCFaucet.sol";
 
 interface IMintableERC20 {
     function mint(address to, uint256 amount) external;
@@ -19,9 +20,12 @@ contract DeployScript is Script {
     bool public constant DEPLOY_PROP_CHALLENGE = true;
     bool public constant WIRE_FACTORY_CHALLENGE = true;
     bool public constant SET_EVAL_TOKENS = true;
+    bool public constant DEPLOY_FAUCET = true;
     bool public constant MINT_TREASURY_USDC = true; // mint 100M tUSDC to Treasury
+    bool public constant MINT_FAUCET_USDC = true;   // mint 1M tUSDC to Faucet
 
     uint256 public constant TREASURY_MINT_AMOUNT = 100_000_000e6; // 100M USDC
+    uint256 public constant FAUCET_MINT_AMOUNT   =   1_000_000e6; //   1M USDC
 
     function run() external {
         // ── Config ──────────────────────────────────────────────────────
@@ -63,6 +67,13 @@ contract DeployScript is Script {
             console.log("Treasury minted: 100,000,000 tUSDC");
         }
 
+        address faucet = _deployOrUseFaucet(usdc, deployer);
+
+        if (MINT_FAUCET_USDC) {
+            IMintableERC20(usdc).mint(faucet, FAUCET_MINT_AMOUNT);
+            console.log("Faucet minted: 1,000,000 tUSDC");
+        }
+
         vm.stopBroadcast();
 
         // ── Summary ─────────────────────────────────────────────────────
@@ -70,6 +81,7 @@ contract DeployScript is Script {
         console.log("Treasury:       ", treasury);
         console.log("AccountFactory: ", factory);
         console.log("PropChallenge:  ", challenge);
+        console.log("Faucet:         ", faucet);
         console.log("Owner:          ", deployer);
     }
 
@@ -115,6 +127,19 @@ contract DeployScript is Script {
         address existing = vm.envOr("ACCOUNT_FACTORY_ADDRESS", address(0));
         require(existing != address(0), "ACCOUNT_FACTORY_ADDRESS not set");
         console.log("AccountFactory (existing):", existing);
+        return existing;
+    }
+
+    // Deploy USDCFaucet or reuse existing via env FAUCET_ADDRESS.
+    function _deployOrUseFaucet(address usdc, address owner) internal returns (address) {
+        if (DEPLOY_FAUCET) {
+            USDCFaucet faucet = new USDCFaucet(usdc, owner);
+            console.log("USDCFaucet deployed:", address(faucet));
+            return address(faucet);
+        }
+        address existing = vm.envOr("FAUCET_ADDRESS", address(0));
+        require(existing != address(0), "FAUCET_ADDRESS not set");
+        console.log("USDCFaucet (existing):", existing);
         return existing;
     }
 

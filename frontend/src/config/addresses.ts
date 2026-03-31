@@ -2,6 +2,7 @@ export const ADDRESSES = {
   propChallenge: import.meta.env.VITE_PROP_CHALLENGE || '',
   accountFactory: import.meta.env.VITE_ACCOUNT_FACTORY || '',
   treasury: import.meta.env.VITE_TREASURY || '',
+  faucet: import.meta.env.VITE_FAUCET || '',
   usdc: import.meta.env.VITE_USDC || '',
   weth: import.meta.env.VITE_WETH || '',
   wbtc: import.meta.env.VITE_WBTC || '',
