@@ -64,6 +64,7 @@ contract PropTradingTest is Test {
         // Wire up
         challenge.setFactory(address(factory));
         factory.setPropChallenge(address(challenge));
+        treasury.setPropChallenge(address(challenge));
 
         // Set eval tokens
         challenge.setEvalToken(address(weth), true);
@@ -286,7 +287,7 @@ contract PropTradingTest is Test {
         uint256 expectedPlatformShare = profit - expectedTraderShare; // 2000 USDC
 
         assertEq(usdc.balanceOf(trader) - traderBalBefore, expectedTraderShare);
-        assertEq(usdc.balanceOf(address(treasury)) - treasuryBalBefore, PA_CAPITAL + expectedPlatformShare);
+        assertEq(usdc.balanceOf(address(treasury)) - treasuryBalBefore, expectedPlatformShare);
     }
 
     function test_settle_noProfit_reverts() public {
@@ -351,15 +352,8 @@ contract PropTradingTest is Test {
         vm.prank(owner);
         challenge.passChallenge(trader);
 
-        // 4. Treasury funds the PA
+        // 4. passChallenge() already funded the PA (paFundingAmount) and set initialCapital
         address pa = factory.getAccount(trader);
-        vm.prank(owner);
-        treasury.fundAccount(pa, PA_CAPITAL);
-
-        // Set initial capital on PA
-        vm.prank(owner);
-        TradingAccount(pa).setInitialCapital(PA_CAPITAL);
-
         assertEq(usdc.balanceOf(pa), PA_CAPITAL);
 
         // 5. Trader executes a whitelisted swap
@@ -433,11 +427,6 @@ contract PropTradingTest is Test {
     function _setupFundedPA(address _trader) internal returns (address pa) {
         _passChallenge(_trader);
         pa = factory.getAccount(_trader);
-
-        vm.prank(owner);
-        treasury.fundAccount(pa, PA_CAPITAL);
-
-        vm.prank(owner);
-        TradingAccount(pa).setInitialCapital(PA_CAPITAL);
+        // passChallenge() already calls treasury.fundAccount and pa.setInitialCapital
     }
 }
