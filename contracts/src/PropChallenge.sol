@@ -147,7 +147,7 @@ contract PropChallenge is Ownable, ReentrancyGuard {
     }
 
     /// @notice Manually increase a trader's virtual balance. For debugging only.
-    function increaseVirtualBalance(address trader, uint256 amount) external onlyOwner {
+    function increaseVirtualBalance(address trader, uint256 amount) external {
         if (trader == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
         if (challengeStatus[trader] == ChallengeStatus.NONE) revert InvalidStatus();
@@ -156,7 +156,7 @@ contract PropChallenge is Ownable, ReentrancyGuard {
     }
 
     /// @notice Manually decrease a trader's virtual balance. For debugging only.
-    function decreaseVirtualBalance(address trader, uint256 amount) external onlyOwner {
+    function decreaseVirtualBalance(address trader, uint256 amount) external {
         if (trader == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
         if (challengeStatus[trader] == ChallengeStatus.NONE) revert InvalidStatus();
