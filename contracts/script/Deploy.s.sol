@@ -6,6 +6,10 @@ import {Treasury} from "../src/Treasury.sol";
 import {AccountFactory} from "../src/AccountFactory.sol";
 import {PropChallenge} from "../src/PropChallenge.sol";
 
+interface IMintableERC20 {
+    function mint(address to, uint256 amount) external;
+}
+
 contract DeployScript is Script {
     // Toggle individual steps for partial redeploys.
     // Set to false to reuse existing deployments via env variables.
@@ -15,6 +19,9 @@ contract DeployScript is Script {
     bool public constant DEPLOY_PROP_CHALLENGE = true;
     bool public constant WIRE_FACTORY_CHALLENGE = true;
     bool public constant SET_EVAL_TOKENS = true;
+    bool public constant MINT_TREASURY_USDC = true; // mint 100M tUSDC to Treasury
+
+    uint256 public constant TREASURY_MINT_AMOUNT = 100_000_000e6; // 100M USDC
 
     function run() external {
         // ── Config ──────────────────────────────────────────────────────
@@ -49,6 +56,11 @@ contract DeployScript is Script {
         if (SET_EVAL_TOKENS) {
             PropChallenge(challenge).setEvalToken(weth, true);
             PropChallenge(challenge).setEvalToken(wbtc, true);
+        }
+
+        if (MINT_TREASURY_USDC) {
+            IMintableERC20(usdc).mint(treasury, TREASURY_MINT_AMOUNT);
+            console.log("Treasury minted: 100,000,000 tUSDC");
         }
 
         vm.stopBroadcast();
