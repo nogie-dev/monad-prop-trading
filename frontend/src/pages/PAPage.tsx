@@ -24,6 +24,7 @@ export function PAPage() {
   const [settleError, setSettleError] = useState<string | null>(null);
   const [settleSuccess, setSettleSuccess] = useState<string | null>(null);
   const [paOwner, setPaOwner] = useState<string | null>(null);
+  const [isLiquidated, setIsLiquidated] = useState(false);
   const [liquidating, setLiquidating] = useState(false);
   const [liquidateError, setLiquidateError] = useState<string | null>(null);
   const [liquidateSuccess, setLiquidateSuccess] = useState<string | null>(null);
@@ -51,13 +52,15 @@ export function PAPage() {
   const fetchPADetails = useCallback(async () => {
     if (!paContract || !paAddress) return;
     try {
-      const [capital, usdcAddr, ownerAddr] = await Promise.all([
+      const [capital, usdcAddr, ownerAddr, liquidated] = await Promise.all([
         paContract.initialCapital() as Promise<bigint>,
         paContract.usdc() as Promise<string>,
         paContract.owner() as Promise<string>,
+        paContract.isLiquidated() as Promise<boolean>,
       ]);
       setInitialCapital(capital);
       setPaOwner(ownerAddr);
+      setIsLiquidated(liquidated);
 
       const rpcProvider = provider ?? new JsonRpcProvider(MONAD_CHAIN.rpcUrl);
       const usdcToken = new Contract(usdcAddr, ERC20ABI, rpcProvider);
@@ -187,7 +190,19 @@ export function PAPage() {
         </p>
       </div>
 
-      {isDrawdownWarning && (
+      {isLiquidated && (
+        <div className="mb-4 bg-gray-900 border border-red-700 rounded-lg p-4 flex items-center gap-3">
+          <span className="text-red-500 text-lg">&#9888;</span>
+          <div>
+            <p className="text-red-400 font-semibold text-sm">Account Liquidated</p>
+            <p className="text-gray-400 text-xs mt-0.5">
+              This PA has been liquidated due to excessive drawdown. All funds have been returned to the treasury. Trading is disabled.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isLiquidated && isDrawdownWarning && (
         <div className="mb-4 bg-red-900/20 border border-red-700/50 rounded-lg p-4">
           <div className="flex items-start justify-between gap-4">
             <p className="text-red-400 text-sm font-medium">
@@ -226,6 +241,7 @@ export function PAPage() {
         />
         <PASwap
           paAddress={paAddress}
+          disabled={isLiquidated}
           onSwap={() => {
             void fetchPADetails(); // refresh USDC + initialCapital
             setRefreshBalancesFlag((x) => x + 1); // trigger PAStatus to refetch all balances
@@ -253,7 +269,7 @@ export function PAPage() {
           </div>
           <button
             onClick={() => { void handleSettle(); }}
-            disabled={!canSettle || settling}
+            disabled={!canSettle || settling || isLiquidated}
             className="px-5 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium text-sm transition-colors"
           >
             {settling ? 'Settling...' : 'Settle'}

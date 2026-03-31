@@ -8,6 +8,7 @@ import { TestRouterABI } from '../abi/TestRouter';
 
 interface Props {
   paAddress: string;
+  disabled?: boolean;
   onSwap: () => void;
 }
 
@@ -71,7 +72,7 @@ function formatTokenAmount(raw: bigint, decimals: number): string {
   });
 }
 
-export function PASwap({ paAddress, onSwap }: Props) {
+export function PASwap({ paAddress, disabled = false, onSwap }: Props) {
   const { provider } = useWallet();
   const paContract = useTradingAccount(paAddress);
 
@@ -210,6 +211,7 @@ export function PASwap({ paAddress, onSwap }: Props) {
   };
 
   const canSwap =
+    !disabled &&
     !!paContract &&
     !!amountIn &&
     parseFloat(amountIn) > 0 &&

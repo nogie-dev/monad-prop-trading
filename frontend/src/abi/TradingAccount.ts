@@ -189,6 +189,13 @@ export const TradingAccountABI = [
   },
   {
     "type": "function",
+    "name": "isLiquidated",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "initialCapital",
     "inputs": [],
     "outputs": [
