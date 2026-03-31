@@ -18,10 +18,15 @@ export function PAPage() {
   const [paAddress, setPaAddress] = useState<string | null>(null);
   const [initialCapital, setInitialCapital] = useState(0n);
   const [usdcBalance, setUsdcBalance] = useState(0n);
+  const [refreshBalancesFlag, setRefreshBalancesFlag] = useState(0); // triggers PAStatus refresh
   const [loading, setLoading] = useState(false);
   const [settling, setSettling] = useState(false);
   const [settleError, setSettleError] = useState<string | null>(null);
   const [settleSuccess, setSettleSuccess] = useState<string | null>(null);
+  const [paOwner, setPaOwner] = useState<string | null>(null);
+  const [liquidating, setLiquidating] = useState(false);
+  const [liquidateError, setLiquidateError] = useState<string | null>(null);
+  const [liquidateSuccess, setLiquidateSuccess] = useState<string | null>(null);
 
   const paContract = useTradingAccount(paAddress);
 
@@ -46,11 +51,13 @@ export function PAPage() {
   const fetchPADetails = useCallback(async () => {
     if (!paContract || !paAddress) return;
     try {
-      const [capital, usdcAddr] = await Promise.all([
+      const [capital, usdcAddr, ownerAddr] = await Promise.all([
         paContract.initialCapital() as Promise<bigint>,
         paContract.usdc() as Promise<string>,
+        paContract.owner() as Promise<string>,
       ]);
       setInitialCapital(capital);
+      setPaOwner(ownerAddr);
 
       const rpcProvider = provider ?? new JsonRpcProvider(MONAD_CHAIN.rpcUrl);
       const usdcToken = new Contract(usdcAddr, ERC20ABI, rpcProvider);
@@ -93,6 +100,28 @@ export function PAPage() {
       setSettling(false);
     }
   };
+
+  const handleLiquidate = async () => {
+    if (!paContract || !ADDRESSES.dexRouter) return;
+    setLiquidating(true);
+    setLiquidateError(null);
+    setLiquidateSuccess(null);
+    try {
+      const tx = await paContract.liquidate(ADDRESSES.dexRouter);
+      await tx.wait();
+      setLiquidateSuccess('Liquidation complete. All funds returned to treasury.');
+      void fetchPADetails();
+      setRefreshBalancesFlag((x) => x + 1);
+    } catch (err: unknown) {
+      const typedErr = err as { reason?: string; shortMessage?: string; message?: string };
+      const msg = typedErr.reason ?? typedErr.shortMessage ?? typedErr.message ?? 'Liquidation failed';
+      setLiquidateError(msg);
+    } finally {
+      setLiquidating(false);
+    }
+  };
+
+  const isAdmin = !!address && !!paOwner && address.toLowerCase() === paOwner.toLowerCase();
 
   const isDrawdownWarning =
     initialCapital > 0n && usdcBalance < (initialCapital * 90n) / 100n;
@@ -160,10 +189,31 @@ export function PAPage() {
 
       {isDrawdownWarning && (
         <div className="mb-4 bg-red-900/20 border border-red-700/50 rounded-lg p-4">
-          <p className="text-red-400 text-sm font-medium">
-            Drawdown Warning: USDC balance is more than 10% below initial capital.
-            The platform may force-close your account.
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-red-400 text-sm font-medium">
+              Drawdown Warning: Portfolio value is more than 10% below initial capital.
+              The platform may force-liquidate your account.
+            </p>
+            {isAdmin && (
+              <button
+                onClick={() => { void handleLiquidate(); }}
+                disabled={liquidating}
+                className="flex-shrink-0 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium text-sm transition-colors"
+              >
+                {liquidating ? 'Liquidating...' : 'Force Liquidate'}
+              </button>
+            )}
+          </div>
+          {liquidateError && (
+            <div className="mt-2 bg-red-900/30 rounded p-2">
+              <p className="text-red-300 text-xs break-words">{liquidateError}</p>
+            </div>
+          )}
+          {liquidateSuccess && (
+            <div className="mt-2 bg-green-900/20 rounded p-2">
+              <p className="text-green-400 text-xs">{liquidateSuccess}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -172,10 +222,14 @@ export function PAPage() {
           paAddress={paAddress}
           initialCapital={initialCapital}
           prices={prices}
+          refreshFlag={refreshBalancesFlag}
         />
         <PASwap
           paAddress={paAddress}
-          onSwap={() => { void fetchPADetails(); }}
+          onSwap={() => {
+            void fetchPADetails(); // refresh USDC + initialCapital
+            setRefreshBalancesFlag((x) => x + 1); // trigger PAStatus to refetch all balances
+          }}
         />
       </div>
 

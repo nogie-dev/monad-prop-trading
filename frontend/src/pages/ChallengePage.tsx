@@ -108,6 +108,8 @@ export function ChallengePage() {
           challengeStatus={challengeStatus}
           positions={positions}
           prices={prices}
+          onRefresh={fetchData}
+          onPositionsRefresh={fetchData}
         />
       </div>
 

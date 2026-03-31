@@ -3,11 +3,13 @@ import { Contract, JsonRpcProvider } from 'ethers';
 import { useWallet } from '../hooks/useWallet';
 import { ADDRESSES, MONAD_CHAIN } from '../config/addresses';
 import { ERC20ABI } from '../abi/ERC20';
+import { TestRouterABI } from '../abi/TestRouter';
 
 interface Props {
   paAddress: string;
   initialCapital: bigint;
   prices: { eth: number; btc: number };
+  refreshFlag?: number; // increment to force reload
 }
 
 interface Balances {
@@ -41,11 +43,12 @@ function formatWbtc(raw: bigint): string {
   });
 }
 
-export function PAStatus({ paAddress, initialCapital, prices }: Props) {
+export function PAStatus({ paAddress, initialCapital, prices, refreshFlag = 0 }: Props) {
   const { provider } = useWallet();
   const [balances, setBalances] = useState<Balances>({ usdc: 0n, weth: 0n, wbtc: 0n });
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [poolPrices, setPoolPrices] = useState<{ eth: number; btc: number } | null>(null);
 
   const fetchBalances = useCallback(async () => {
     const rpcProvider =
@@ -70,9 +73,28 @@ export function PAStatus({ paAddress, initialCapital, prices }: Props) {
     }
   }, [paAddress, provider]);
 
+  const fetchPoolPrices = useCallback(async () => {
+    if (!ADDRESSES.dexRouter) return;
+    try {
+      const rpcProvider = provider ?? new JsonRpcProvider(MONAD_CHAIN.rpcUrl);
+      const router = new Contract(ADDRESSES.dexRouter, TestRouterABI, rpcProvider);
+      const [ethOut, btcOut] = await Promise.all([
+        router.getAmountOut(ADDRESSES.weth, ADDRESSES.usdc, BigInt(1e18)) as Promise<bigint>,
+        router.getAmountOut(ADDRESSES.wbtc, ADDRESSES.usdc, BigInt(1e8)) as Promise<bigint>,
+      ]);
+      setPoolPrices({
+        eth: Number(ethOut) / 1e6,
+        btc: Number(btcOut) / 1e6,
+      });
+    } catch (err) {
+      console.error('[PAStatus] Failed to fetch pool prices:', err);
+    }
+  }, [provider]);
+
   useEffect(() => {
-    fetchBalances();
-  }, [fetchBalances]);
+    void fetchBalances();
+    void fetchPoolPrices();
+  }, [fetchBalances, fetchPoolPrices, refreshFlag]);
 
   const usdcValue = Number(balances.usdc) / 1e6;
   const wethValue = (Number(balances.weth) / 1e18) * prices.eth;
@@ -150,6 +172,31 @@ export function PAStatus({ paAddress, initialCapital, prices }: Props) {
             {' '}
             <span className="text-sm">({isProfitable ? '+' : ''}{pnlPercent.toFixed(2)}%)</span>
           </p>
+        </div>
+      </div>
+
+      {/* Price Reference */}
+      <div className="mt-4 border-t border-gray-700 pt-4">
+        <p className="text-xs text-gray-500 mb-2">Price Reference</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gray-900/40 rounded-lg p-2.5">
+            <p className="text-xs text-gray-500 mb-1">Chainlink (Liquidation)</p>
+            <p className="font-mono text-xs text-white">
+              ETH ${prices.eth > 0 ? prices.eth.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
+            </p>
+            <p className="font-mono text-xs text-white">
+              BTC ${prices.btc > 0 ? prices.btc.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
+            </p>
+          </div>
+          <div className="bg-gray-900/40 rounded-lg p-2.5">
+            <p className="text-xs text-gray-500 mb-1">Pool Price (DEX)</p>
+            <p className="font-mono text-xs text-white">
+              ETH ${poolPrices ? poolPrices.eth.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
+            </p>
+            <p className="font-mono text-xs text-white">
+              BTC ${poolPrices ? poolPrices.btc.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
+            </p>
+          </div>
         </div>
       </div>
     </div>

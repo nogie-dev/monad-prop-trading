@@ -97,6 +97,8 @@ export function EvalStatus({ evalAccount, profitTarget, challengeStatus, positio
       const tx = await propChallenge.passChallenge(address);
       await tx.wait();
       setSuccess('Pass submitted. PA deployment/funding in progress.');
+      // Force refresh of status/positions to reflect PASSED immediately
+      void Promise.all([onRefresh?.(), onPositionsRefresh?.()]);
     } catch (err: unknown) {
       const msg = (err as { reason?: string; shortMessage?: string; message?: string }).reason
         || (err as { shortMessage?: string }).shortMessage
