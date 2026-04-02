@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time as _time
 from decimal import Decimal
 from pathlib import Path
 from typing import List, Tuple
@@ -87,7 +88,7 @@ PROP_ABI = [
     },
 ]
 
-# AccountFactory ABI: getAllAccounts
+# AccountFactory ABI: getActiveAccounts, deactivateAccount
 FACTORY_ABI = [
     {
         "type": "function",
@@ -96,9 +97,23 @@ FACTORY_ABI = [
         "inputs": [],
         "outputs": [{"name": "", "type": "address[]"}],
     },
+    {
+        "type": "function",
+        "name": "getAllActiveAccounts",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "address[]"}],
+    },
+    {
+        "type": "function",
+        "name": "deactivateAccount",
+        "stateMutability": "nonpayable",
+        "inputs": [{"name": "account", "type": "address"}],
+        "outputs": [],
+    },
 ]
 
-# TradingAccount ABI: initialCapital, liquidate
+# TradingAccount ABI: initialCapital, isLiquidated, liquidate
 TRADING_ACCOUNT_ABI = [
     {
         "type": "function",
@@ -106,6 +121,13 @@ TRADING_ACCOUNT_ABI = [
         "stateMutability": "view",
         "inputs": [],
         "outputs": [{"name": "", "type": "uint256"}],
+    },
+    {
+        "type": "function",
+        "name": "isLiquidated",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "bool"}],
     },
     {
         "type": "function",
@@ -130,6 +152,9 @@ ERC20_ABI = [
 
 # Shared price cache updated by monitor loop
 _latest_prices: dict = {}
+# Price history for chart API: [{time, eth, btc}, ...]
+_price_history: list = []
+_MAX_HISTORY = 500
 
 
 def usd6(value: int) -> str:
@@ -172,9 +197,9 @@ async def monitor_pas(w3: Web3, prices: dict, acct):
     )
 
     try:
-        pa_addresses = factory.functions.getAllAccounts().call()
+        pa_addresses = factory.functions.getAllActiveAccounts().call()
     except Exception as e:
-        print(f"[monitor_pa] getAllAccounts failed: {e}")
+        print(f"[monitor_pa] getAllActiveAccounts failed: {e}")
         return
 
     if not pa_addresses:
@@ -197,6 +222,11 @@ async def monitor_pas(w3: Web3, prices: dict, acct):
         try:
             pa_addr = Web3.to_checksum_address(pa_addr)
             pa = w3.eth.contract(address=pa_addr, abi=TRADING_ACCOUNT_ABI)
+
+            if pa.functions.isLiquidated().call():
+                print(f"[monitor_pa] {pa_addr} already liquidated, skipping")
+                continue
+
             initial_capital = pa.functions.initialCapital().call()
 
             if initial_capital == 0:
@@ -234,6 +264,22 @@ async def monitor_pas(w3: Web3, prices: dict, acct):
                 signed = acct.sign_transaction(tx)
                 tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
                 print(f"[monitor_pa] liquidate sent: {tx_hash.hex()}")
+                w3.eth.wait_for_transaction_receipt(tx_hash)
+                # Deactivate from factory so it won't appear in getActiveAccounts again
+                try:
+                    deact_tx = factory.functions.deactivateAccount(pa_addr).build_transaction(
+                        {
+                            "from": acct.address,
+                            "nonce": w3.eth.get_transaction_count(acct.address),
+                            "gasPrice": w3.eth.gas_price,
+                        }
+                    )
+                    deact_tx["gas"] = w3.eth.estimate_gas(deact_tx)
+                    signed_deact = acct.sign_transaction(deact_tx)
+                    deact_hash = w3.eth.send_raw_transaction(signed_deact.rawTransaction)
+                    print(f"[monitor_pa] deactivateAccount sent: {deact_hash.hex()}")
+                except Exception as de:
+                    print(f"[monitor_pa] deactivateAccount failed for {pa_addr}: {de}")
 
         except Exception as e:
             print(f"[monitor_pa] error for PA {pa_addr}: {e}")
@@ -251,6 +297,16 @@ async def monitor():
     while True:
         prices = fetch_chainlink_prices(w3_price) if w3_price else {}
         _latest_prices.update(prices)
+
+        # Append snapshot to price history
+        eth_cs = Web3.to_checksum_address(WETH_ADDRESS) if WETH_ADDRESS else None
+        btc_cs = Web3.to_checksum_address(WBTC_ADDRESS) if WBTC_ADDRESS else None
+        eth_price = _latest_prices.get(eth_cs, 0) if eth_cs else 0
+        btc_price = _latest_prices.get(btc_cs, 0) if btc_cs else 0
+        if eth_price or btc_price:
+            _price_history.append({"time": int(_time.time()), "eth": eth_price, "btc": btc_price})
+            if len(_price_history) > _MAX_HISTORY:
+                _price_history.pop(0)
 
         for trader in MONITORED_TRADERS:
             try:
@@ -322,12 +378,14 @@ async def monitor():
 
 
 async def handle_prices(request: web.Request) -> web.Response:
-    """Return latest cached Chainlink prices as JSON."""
+    """Return latest cached prices with update timestamp (seconds)."""
     eth_addr = Web3.to_checksum_address(WETH_ADDRESS) if WETH_ADDRESS else None
     btc_addr = Web3.to_checksum_address(WBTC_ADDRESS) if WBTC_ADDRESS else None
+    updated_at = _price_history[-1]["time"] if _price_history else int(_time.time())
     payload = {
         "eth": _latest_prices.get(eth_addr, 0) if eth_addr else 0,
         "btc": _latest_prices.get(btc_addr, 0) if btc_addr else 0,
+        "updatedAt": updated_at,
     }
     return web.Response(
         text=json.dumps(payload),
@@ -336,9 +394,21 @@ async def handle_prices(request: web.Request) -> web.Response:
     )
 
 
+async def handle_history(request: web.Request) -> web.Response:
+    """Return accumulated price history for charting."""
+    # Ensure history is capped and ordered before returning
+    history = _price_history[-_MAX_HISTORY:]
+    return web.Response(
+        text=json.dumps(history),
+        content_type="application/json",
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
 async def run_api_server():
     app = web.Application()
     app.router.add_get("/prices", handle_prices)
+    app.router.add_get("/history", handle_history)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PRICE_API_PORT)
