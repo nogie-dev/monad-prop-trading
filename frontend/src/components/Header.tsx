@@ -50,6 +50,9 @@ export function Header({ page, setPage }: Props) {
         <NavItem active={page === 'challenge'} onClick={() => setPage('challenge')}>
           Challenge
         </NavItem>
+        <NavItem active={page === 'trade'} onClick={() => setPage('trade')}>
+          Trade
+        </NavItem>
         <NavItem active={page === 'pa'} onClick={() => setPage('pa')}>
           PA Dashboard
         </NavItem>

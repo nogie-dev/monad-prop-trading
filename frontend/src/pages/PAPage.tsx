@@ -6,7 +6,6 @@ import { usePrices } from '../hooks/usePrices';
 import { ADDRESSES, MONAD_CHAIN } from '../config/addresses';
 import { ERC20ABI } from '../abi/ERC20';
 import { PAStatus } from '../components/PAStatus';
-import { PASwap } from '../components/PASwap';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -209,20 +208,12 @@ export function PAPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+      <div className="mb-5">
         <PAStatus
           paAddress={paAddress}
           initialCapital={initialCapital}
           prices={prices}
           refreshFlag={refreshBalancesFlag}
-        />
-        <PASwap
-          paAddress={paAddress}
-          disabled={isLiquidated}
-          onSwap={() => {
-            void fetchPADetails();
-            setRefreshBalancesFlag((x) => x + 1);
-          }}
         />
       </div>
 

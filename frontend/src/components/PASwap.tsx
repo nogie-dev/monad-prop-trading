@@ -52,6 +52,7 @@ export function PASwap({ paAddress, disabled = false, onSwap }: Props) {
   const [swapping, setSwapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [slippagePct, setSlippagePct] = useState<number>(0.5); // percent
 
   const pairs = buildPairs();
   const pair = pairs[selectedPair];
@@ -121,7 +122,8 @@ export function PASwap({ paAddress, disabled = false, onSwap }: Props) {
       const rpcProvider = provider ?? new JsonRpcProvider(MONAD_CHAIN.rpcUrl);
       const router = new Contract(ADDRESSES.dexRouter, TestRouterABI, rpcProvider);
       const expectedOut = await router.getAmountOut(pair.tokenIn, pair.tokenOut, amountInBig) as bigint;
-      const minAmountOut = (expectedOut * 985n) / 1000n;
+      const slippageBps = BigInt(Math.round(slippagePct * 100)); // percent → basis points
+      const minAmountOut = (expectedOut * (10_000n - slippageBps)) / 10_000n;
 
       const iface = new Interface(TestRouterABI);
       const data = iface.encodeFunctionData('swapExactIn', [
@@ -191,11 +193,44 @@ export function PASwap({ paAddress, disabled = false, onSwap }: Props) {
         />
       </div>
 
+      {/* Slippage */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-mid">Slippage</p>
+          <span className="text-[11px] text-mid">applies to minAmountOut</span>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {[0.1, 0.5, 1.0].map((pct) => (
+            <button
+              key={pct}
+              onClick={() => setSlippagePct(pct)}
+              className={`px-3 py-1 rounded-sm text-xs font-medium border transition-colors duration-150 ${
+                slippagePct === pct ? 'border-accent text-accent bg-accent/5' : 'border-line text-mid hover:border-accent2/50 hover:text-hi'
+              }`}
+            >
+              {pct}%
+            </button>
+          ))}
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min="0"
+              max="50"
+              step="0.1"
+              value={slippagePct}
+              onChange={(e) => setSlippagePct(Math.max(0, Math.min(50, Number(e.target.value))))}
+              className="w-20 bg-[#0f1319] border border-line rounded-sm px-2 py-1 text-xs text-hi font-mono tabular-nums placeholder:text-mid focus:ring-1 focus:ring-accent focus:outline-none transition-colors duration-150"
+            />
+            <span className="text-xs text-mid">%</span>
+          </div>
+        </div>
+      </div>
+
       {/* Preview */}
       <div className="mb-4 p-3 bg-base border border-line rounded-sm">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-mid">Expected Output</span>
-          <span className="text-xs text-mid">1.5% slippage</span>
+          <span className="text-xs text-mid">{slippagePct}% slippage</span>
         </div>
         {previewLoading ? (
           <span className="text-sm text-mid">Calculating...</span>

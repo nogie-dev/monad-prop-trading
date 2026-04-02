@@ -53,6 +53,21 @@
 - [x] Liquidation entrypoint (onlyAdmin): liquidate(dexTarget) swaps WETH/WBTC → USDC via router, leaves 1 wei dust, emits Liquidated event
 - [x] PA pre-approves router in constructor; liquidate() uses best-effort swap (0 minAmountOut), emits LiquidationSwapFailed on failure
 
+## Phase 5: Trading Chart [NOT STARTED]
+- [x] Add Trade menu at Navigation
+- [x] Remove the execute (PASwap) section from the PA Dashboard
+- [x] Add a new "Trade" page as a nav item between "challenge" and "dashboard"
+- [x] Add price chart using lightweight-charts (area series) with live updates from monitoring.py /history
+- [x] monitoring.py: accumulate price history in memory, expose /history + /prices endpoints
+- [x] Add pair selector tabs: ETH/USDC and BTC/USDC (switchable)
+- [x] Display ticker symbol, token contract address, and pool address for each pair
+- [x] Add trade execution panel: PASwap on right side of chart
+- [x] Add slippage setting: preset buttons (0.1% / 0.5% / 1.0%) with custom input
+- [x] Add User Position & Unrealized PnL summary (below pair selector or inside trade panel)
+  - [x] Display one summary line per pair (ETH/USDC, BTC/USDC)
+  - [x] Show metrics: Entry Price, Current Price (reusing /prices), and Unrealized PnL (Amount & %)
+  - [x] Apply conditional styling for PnL (Green for profit, Red for loss)
+  - [x] Implement data fetching for user's entry price and token balances
 ---
 
 ## Session Log

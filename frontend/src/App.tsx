@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { WalletProvider } from './hooks/useWallet';
 import { Header } from './components/Header';
 import { ChallengePage } from './pages/ChallengePage';
+import { TradePage } from './pages/TradePage';
 import { PAPage } from './pages/PAPage';
 import { DebugPage } from './pages/DebugPage';
 
-export type AppPage = 'challenge' | 'pa' | 'debug';
+export type AppPage = 'challenge' | 'trade' | 'pa' | 'debug';
 
 function App() {
   const [page, setPage] = useState<AppPage>('challenge');
@@ -15,7 +16,10 @@ function App() {
       <div className="flex min-h-screen bg-base text-hi">
         <Header page={page} setPage={setPage} />
         <main className="flex-1 min-h-screen overflow-auto">
-          {page === 'challenge' ? <ChallengePage /> : page === 'pa' ? <PAPage /> : <DebugPage />}
+          {page === 'challenge' && <ChallengePage />}
+          {page === 'trade' && <TradePage />}
+          {page === 'pa' && <PAPage />}
+          {page === 'debug' && <DebugPage />}
         </main>
       </div>
     </WalletProvider>
