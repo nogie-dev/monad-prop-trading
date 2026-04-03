@@ -6,11 +6,10 @@ interface Prices {
   updatedAt?: number;
 }
 
-// monitoring.py price API (run locally or on server)
-const PRICE_API = import.meta.env.VITE_PRICE_API || 'http://localhost:8000/prices';
+const PRICE_API = `${import.meta.env.VITE_OFFCHAIN_API ?? 'http://localhost:9999'}/prices`;
 
 async function fetchMonitorPrices(): Promise<Prices> {
-  const res = await fetch(PRICE_API);
+  const res = await fetch(PRICE_API, { headers: { 'ngrok-skip-browser-warning': 'true' } });
   if (!res.ok) throw new Error(`Price API error: ${res.status}`);
   return res.json() as Promise<Prices>;
 }

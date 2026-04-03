@@ -20,8 +20,8 @@ STATE_RPC = os.getenv("MONAD_RPC") or os.getenv("MONITOR_STATE_RPC")    # chain 
 # MONITOR_PRIVATE_KEY is optional; falls back to PRIVATE_KEY
 ADMIN_KEY_RAW = (os.getenv("MONITOR_PRIVATE_KEY") or os.getenv("PRIVATE_KEY") or "").strip()
 PROP_CHALLENGE = os.getenv("PROP_CHALLENGE_ADDRESS")
-MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL", "300"))  # seconds
-PRICE_API_PORT = int(os.getenv("PRICE_API_PORT", "8000"))
+MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL", "60"))  # seconds
+PRICE_API_PORT = int(os.getenv("PRICE_API_PORT", "9999"))
 WETH_ADDRESS = os.getenv("WETH_ADDRESS")
 WBTC_ADDRESS = os.getenv("WBTC_ADDRESS")
 FEED_ETH = os.getenv("MONITOR_FEED_ETH")  # e.g., Chainlink ETH/USD
@@ -377,6 +377,17 @@ async def monitor():
         await asyncio.sleep(MONITOR_INTERVAL)
 
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, ngrok-skip-browser-warning",
+}
+
+
+async def handle_options(request: web.Request) -> web.Response:
+    return web.Response(status=204, headers=CORS_HEADERS)
+
+
 async def handle_prices(request: web.Request) -> web.Response:
     """Return latest cached prices with update timestamp (seconds)."""
     eth_addr = Web3.to_checksum_address(WETH_ADDRESS) if WETH_ADDRESS else None
@@ -390,18 +401,17 @@ async def handle_prices(request: web.Request) -> web.Response:
     return web.Response(
         text=json.dumps(payload),
         content_type="application/json",
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers=CORS_HEADERS,
     )
 
 
 async def handle_history(request: web.Request) -> web.Response:
     """Return accumulated price history for charting."""
-    # Ensure history is capped and ordered before returning
     history = _price_history[-_MAX_HISTORY:]
     return web.Response(
         text=json.dumps(history),
         content_type="application/json",
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers=CORS_HEADERS,
     )
 
 
@@ -409,6 +419,8 @@ async def run_api_server():
     app = web.Application()
     app.router.add_get("/prices", handle_prices)
     app.router.add_get("/history", handle_history)
+    app.router.add_route("OPTIONS", "/prices", handle_options)
+    app.router.add_route("OPTIONS", "/history", handle_options)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PRICE_API_PORT)

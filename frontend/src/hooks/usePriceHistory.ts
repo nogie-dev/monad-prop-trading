@@ -6,11 +6,10 @@ export interface HistoryPoint {
   btc: number;
 }
 
-const HISTORY_API_BASE = import.meta.env.VITE_PRICE_API || 'http://localhost:8000/prices';
-const HISTORY_API = HISTORY_API_BASE.replace(/\/prices?$/, '') + '/history';
+const HISTORY_API = `${import.meta.env.VITE_OFFCHAIN_API ?? 'http://localhost:9999'}/history`;
 
 async function fetchHistory(): Promise<HistoryPoint[]> {
-  const res = await fetch(HISTORY_API);
+  const res = await fetch(HISTORY_API, { headers: { 'ngrok-skip-browser-warning': 'true' } });
   if (!res.ok) throw new Error(`History API error: ${res.status}`);
   return res.json() as Promise<HistoryPoint[]>;
 }
