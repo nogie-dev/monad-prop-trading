@@ -223,7 +223,7 @@ export function PAPage() {
           <div>
             <p className="text-xs uppercase tracking-widest text-mid mb-1">Settle Account</p>
             <p className="text-xs text-mid">
-              Distribute profits: 20% to you, 80% to treasury.
+              Distribute profits: 80% to you, 20% to treasury.
               {!canSettle && initialCapital > 0n && (
                 <span className="text-loss ml-1">
                   Requires balance above initial capital of $
