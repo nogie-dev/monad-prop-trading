@@ -1,44 +1,44 @@
 # Monad Prop Trading
 
-온체인 프롭 트레이딩 플랫폼. 트레이더는 USDC 수수료를 납부하고 페이퍼 트레이딩 심사를 통과하면, 플랫폼 자금이 담긴 Performance Account(PA)를 부여받아 실제 DEX 거래를 수행할 수 있습니다.
+An on-chain prop trading platform. Traders pay a USDC challenge fee and, upon passing a paper trading evaluation, are granted a platform-funded Performance Account (PA) to execute real DEX trades.
 
-기존 프롭 펌(FTMO 등)의 구조를 스마트 컨트랙트로 구현해, 트레이더는 자금의 키를 쥐지 않으면서도 거래 권한을 갖는 **trustless 자금 위탁 구조**를 실현합니다.
-
----
-
-## 전체 흐름
-
-![Architecture](./architecture.svg)
-
-### Phase 1 — Evaluation (심사)
-
-1. 트레이더가 USDC 수수료를 납부하면 온체인에 평가 슬롯이 생성됩니다.
-2. 웹 프론트엔드에서 오라클 가격을 기준으로 가상 매매를 진행하며, 각 포지션 개폐가 컨트랙트에 기록됩니다.
-3. 팀(플랫폼 오너)이 P&L을 모니터링하다가:
-   - 수익 목표 달성 → `passChallenge()` 호출 → PA 자동 배포
-   - 손실 한도 초과 → `failChallenge()` 호출 → 환불 없이 종료
-
-### Phase 2 — Live Trading (실거래)
-
-1. AccountFactory가 트레이더 전용 TradingAccount(PA)를 배포합니다.
-2. Treasury가 PA에 USDC 운용 자금을 공급합니다.
-3. 트레이더는 PA의 `execute()`만 호출할 수 있으며, 이 함수는 **3중 화이트리스트**로 허용된 거래만 통과시킵니다.
-4. 수익 목표 달성 시 `settle()` → 80% 트레이더 / 20% Treasury로 분배됩니다.
-5. 손실 한도 초과 시 `forceClose()` → 전액 Treasury 회수, 트레이더 권한 박탈됩니다.
+This project replicates the structure of traditional prop firms (e.g., FTMO) using smart contracts, achieving a **trustless capital delegation model** where traders hold trading permissions without ever holding the keys to the funds.
 
 ---
 
-## 컨트랙트 구조
+## Architecture Overview
+
+![Architecture](./propnad.drawio.svg)
+
+### Phase 1 — Evaluation
+
+1. A trader pays the USDC challenge fee, creating an evaluation slot on-chain.
+2. The trader executes simulated trades via the web frontend using oracle prices; each position open/close is recorded on-chain.
+3. The platform owner monitors P&L and:
+   - Profit target met → calls `passChallenge()` → PA is automatically deployed
+   - Drawdown limit exceeded → calls `failChallenge()` → evaluation ends with no refund
+
+### Phase 2 — Live Trading
+
+1. `AccountFactory` deploys a trader-specific `TradingAccount` (PA).
+2. `Treasury` funds the PA with USDC operating capital.
+3. The trader can only call `execute()` on the PA, which enforces a **3-layer whitelist** to permit only approved trades.
+4. On profit target → `settle()` → 80% to trader / 20% to Treasury.
+5. On drawdown limit exceeded → `forceClose()` → full funds returned to Treasury, trader permissions revoked.
+
+---
+
+## Contract Structure
 
 ```
 contracts/src/
-├── PropChallenge.sol     # 수수료 수납, 페이퍼 트레이딩 기록, 합격/실패 판정
-├── AccountFactory.sol    # TradingAccount 배포 및 레지스트리
-├── TradingAccount.sol    # Performance Account (PA) — execute() 3중 검증
-└── Treasury.sol          # 플랫폼 자금 보관, PA 자금 공급, 수익 출금
+├── PropChallenge.sol     # Fee collection, paper trading record, pass/fail judgment
+├── AccountFactory.sol    # TradingAccount deployment and registry
+├── TradingAccount.sol    # Performance Account (PA) — execute() with 3-layer validation
+└── Treasury.sol          # Platform fund custody, PA funding, profit withdrawal
 ```
 
-### 컨트랙트 간 관계
+### Contract Relationships
 
 - `PropChallenge` → `passChallenge()` → `AccountFactory.deployAccount()` → `TradingAccount`
 - `PropChallenge` fee → `Treasury` → `fundAccount()` → `TradingAccount`
@@ -46,80 +46,83 @@ contracts/src/
 
 ---
 
-## 기술 스택
+## Tech Stack
 
-| 영역 | 기술 |
+| Layer | Technology |
 |---|---|
-| 스마트 컨트랙트 | Solidity 0.8.24, Foundry, OpenZeppelin |
-| 프론트엔드 | React 18, TypeScript, ethers.js v6, Tailwind CSS, Vite |
-| 체인 | Monad Testnet (EVM 호환, 고처리량, 저지연) |
-| 기준 통화 | USDC (ERC-20) |
-| 가격 피드 | CoinGecko API (심사 페이즈) |
+| Smart Contracts | Solidity 0.8.24, Foundry, OpenZeppelin |
+| Frontend | React 18, TypeScript, ethers.js v6, Tailwind CSS, Vite |
+| Chain | Monad Testnet (EVM-compatible, high throughput, low latency) |
+| Base Currency | USDC (ERC-20) |
+| Price Feed | CoinGecko API (evaluation phase) |
 
 ---
 
-## 디렉토리 구조
+## Directory Structure
 
 ```
 monad-prop-trading/
 ├── contracts/
-│   ├── src/                  # 컨트랙트 소스
-│   ├── test/                 # Foundry 테스트
-│   └── script/Deploy.s.sol   # 배포 스크립트
+│   ├── src/                  # Contract source files
+│   ├── test/                 # Foundry tests
+│   └── script/Deploy.s.sol   # Deployment script
 └── frontend/
     └── src/
-        ├── components/       # UI 컴포넌트
+        ├── components/       # UI components
         ├── hooks/            # useWallet, useContracts, usePrices
-        ├── config/           # 컨트랙트 주소, 상수
-        ├── abi/              # 컨트랙트 ABI
+        ├── config/           # Contract addresses, constants
+        ├── abi/              # Contract ABIs
         └── pages/            # ChallengePage
 ```
 
 ---
 
-## 시작하기
+## Getting Started
 
 ```bash
-# 컨트랙트 빌드 및 테스트
+# Build and test contracts
 cd contracts
 forge build
 forge test -vvv
 
-# 프론트엔드 실행
+# Run frontend
 cd frontend
-cp .env.example .env   # 컨트랙트 주소 입력
+cp .env.example .env   # Fill in contract addresses
 npm install
 npm run dev
 ```
 
 ---
 
-## 보안 구조 (TradingAccount execute() 3중 검증)
+## Security Design (TradingAccount execute() 3-Layer Validation)
 
-> 이 섹션은 추후 업데이트 예정입니다.
->
-> - **어떻게 트레이더가 임의로 자금을 이체하지 못하는가**
-> - **화이트리스트 기반으로 DEX 거래만 허용하는 구체적인 메커니즘**
+The `execute()` function enforces three independent whitelist checks to prevent unauthorized fund movement:
+
+- **Target address whitelist** — only approved DEX router contracts may be called
+- **Function selector whitelist** — only approved swap/trade selectors are permitted; transfer-related selectors (`transfer`, `approve`, `transferFrom`) are explicitly excluded
+- **Token address whitelist** — only approved token addresses may interact with the PA
+
+This ensures traders can execute DEX trades but can never directly transfer, approve, or withdraw funds from the PA.
 
 ---
 
-## 디버깅 모드 (가상 잔고/상태 강제 조정)
+## Debug Mode (Force-adjust virtual balance and state)
 
-운영/테스트 중 합격·실패 플로우를 빠르게 검증하기 위한 디버그 함수와 스크립트가 있습니다.
+Debug functions and scripts are provided to quickly verify pass/fail flows during development and testing.
 
-- `PropChallenge` 디버그 함수 (owner 전용):
-  - `activateChallengeDebug(address trader)`: 수수료 없이 바로 `ACTIVE` 상태로 초기화.
-  - `increaseVirtualBalance(address trader, uint256 amount)`: 가상 잔고 증가.
-  - `decreaseVirtualBalance(address trader, uint256 amount)`: 가상 잔고 감소.
+- `PropChallenge` debug functions (owner only):
+  - `activateChallengeDebug(address trader)`: Instantly sets the trader to `ACTIVE` state without paying a fee.
+  - `increaseVirtualBalance(address trader, uint256 amount)`: Increases virtual balance.
+  - `decreaseVirtualBalance(address trader, uint256 amount)`: Decreases virtual balance.
 
-- 스크립트: `contracts/script/TestDebugTrigger.s.sol`
-  - 토글 플래그로 `activate / increase / decrease / pass / setPaFundingAmount / treasury mint`를 개별 실행.
-  - 예시 실행 (env 필요: `PRIVATE_KEY`, `PROP_CHALLENGE_ADDRESS`, `DEBUG_TRADER`, `DEBUG_AMOUNT` 등):
+- Script: `contracts/script/TestDebugTrigger.s.sol`
+  - Toggle flags to run `activate / increase / decrease / pass / setPaFundingAmount / treasury mint` individually.
+  - Example usage (requires env vars: `PRIVATE_KEY`, `PROP_CHALLENGE_ADDRESS`, `DEBUG_TRADER`, `DEBUG_AMOUNT`, etc.):
     ```sh
     cd contracts
     set -a && source ../.env && set +a
-    export DEBUG_TRADER=<트레이더주소>
-    export DEBUG_AMOUNT=<6-decimals USDC 값>
+    export DEBUG_TRADER=<trader_address>
+    export DEBUG_AMOUNT=<6-decimals USDC value>
     forge script script/TestDebugTrigger.s.sol:TestDebugTrigger \
       --rpc-url "$MONAD_RPC" \
       --private-key "$PRIVATE_KEY" \
@@ -127,8 +130,8 @@ npm run dev
       --broadcast
     ```
 
-디버그 흐름 예시:
-1) `activateChallengeDebug`로 `ACTIVE` 상태 진입.
-2) `increaseVirtualBalance`로 목표(예: 11,000 USDC) 이상으로 올림.
-3) `passChallenge` 호출 → 합격/PA 배포·자금 설정 동작 확인.
-4) `decreaseVirtualBalance`로 실패 조건 확인 등 시나리오 재현.
+Debug flow example:
+1. Call `activateChallengeDebug` to enter `ACTIVE` state.
+2. Call `increaseVirtualBalance` to exceed the profit target (e.g., 11,000 USDC).
+3. Call `passChallenge` → verify pass / PA deployment and funding behavior.
+4. Call `decreaseVirtualBalance` to reproduce failure condition scenarios.
